@@ -1,0 +1,78 @@
+/* GATO SWING · Control del celular (estilo caricatura años 20) */
+:root {
+  --blue: #3e46c9; --yellow: #ffe800; --maroon: #8a0a22; --ink: #141414; --cream: #f6ead0; --paper: #fbf3df; --red: #ee2430; --white: #fffaf0;
+  --deco: 'Limelight', 'Rye', Georgia, serif; --ui: 'Lilita One', 'Arial Rounded MT Bold', 'Trebuchet MS', sans-serif;
+  --vh: 1vh; --accent: #ff3b4e;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; height: 100%; background: var(--blue); color: var(--ink); font-family: var(--ui); overflow: hidden;
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; overscroll-behavior: none; touch-action: manipulation; }
+body { background: var(--blue) repeating-conic-gradient(from 0deg at 50% 120%, rgba(110,120,255,.25) 0deg 10deg, transparent 10deg 20deg); }
+#app { position: fixed; left: 0; top: 0; width: 100%; height: calc(var(--vh) * 100); display: flex; flex-direction: column;
+  padding: max(8px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left)); }
+.hidden { display: none !important; }
+button { font-family: var(--ui); color: var(--ink); background: var(--yellow); border: 3px solid var(--ink); border-radius: 14px; box-shadow: 4px 4px 0 var(--ink); font-size: 18px; padding: 10px 16px; cursor: pointer; }
+button:active { -webkit-transform: translate(3px, 3px); transform: translate(3px, 3px); box-shadow: 1px 1px 0 var(--ink); }
+button.big { width: 100%; font-size: 24px; background: var(--red); color: var(--yellow); text-shadow: 2px 2px 0 var(--ink); padding: 14px; }
+button.tiny { font-size: 14px; padding: 0 7px; border-width: 2px; box-shadow: 2px 2px 0 var(--ink); background: var(--cream); line-height: 24px; }
+
+#top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.logo { font-family: var(--deco); font-size: 26px; color: var(--yellow); -webkit-text-stroke: 1.5px var(--ink); text-shadow: 3px 3px 0 var(--ink); }
+.net { display: flex; align-items: center; gap: 6px; background: var(--paper); border: 2px solid var(--ink); border-radius: 20px; padding: 3px 10px; font-size: 13px; box-shadow: 2px 2px 0 var(--ink); max-width: 60%; }
+.net span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.net .dot { width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--ink); background: #999; flex: none; }
+.net.ok .dot { background: #34d058; } .net.warn .dot { background: #ffb020; -webkit-animation: blink 1s infinite; animation: blink 1s infinite; } .net.bad .dot { background: var(--red); }
+@-webkit-keyframes blink { 50% { opacity: .3; } } @keyframes blink { 50% { opacity: .3; } }
+
+.screen { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.paper { background: var(--paper); border: 4px solid var(--ink); border-radius: 18px; box-shadow: 6px 6px 0 var(--ink); padding: 18px; margin: auto 0; position: relative; }
+.paper h1 { font-family: var(--deco); font-weight: 400; color: var(--maroon); margin: 0 0 12px; text-align: center; font-size: 34px; }
+.paper p { font-size: 17px; text-align: center; line-height: 1.35; }
+label { display: block; font-size: 16px; margin-bottom: 12px; }
+input { display: block; width: 100%; margin-top: 4px; font-family: var(--ui); font-size: 24px; padding: 10px 12px; border: 3px solid var(--ink); border-radius: 12px; background: var(--white); color: var(--ink); -webkit-user-select: text; user-select: text; -webkit-appearance: none; appearance: none; }
+#in-room { text-transform: uppercase; letter-spacing: 10px; text-align: center; font-family: var(--deco); font-size: 34px; }
+
+.who { display: flex; gap: 10px; align-items: center; background: var(--paper); border: 3px solid var(--ink); border-radius: 16px; padding: 8px; box-shadow: 4px 4px 0 var(--ink); }
+.por { width: 74px; height: 74px; flex: none; border-radius: 14px; border: 4px solid var(--accent); background: var(--blue) center/cover no-repeat; box-shadow: 0 0 0 2px var(--ink); }
+.info { flex: 1; min-width: 0; }
+.name-row { display: flex; align-items: center; gap: 6px; }
+.name-row b { font-size: 24px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.info small { display: block; color: #6b5a48; font-size: 13px; }
+.status { margin-top: 3px; font-size: 15px; color: var(--maroon); }
+
+.judge { text-align: center; margin: 10px 0 8px; min-height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+#judge-text { font-family: var(--deco); font-size: 32px; color: var(--yellow); -webkit-text-stroke: 1.5px var(--ink); text-shadow: 3px 3px 0 var(--ink); }
+#judge-text.pop { -webkit-animation: pop .35s cubic-bezier(.2,1.6,.4,1); animation: pop .35s cubic-bezier(.2,1.6,.4,1); }
+@-webkit-keyframes pop { from { -webkit-transform: scale(.4); } to { -webkit-transform: scale(1); } }
+@keyframes pop { from { transform: scale(.4); } to { transform: scale(1); } }
+.judge small { color: var(--white); font-size: 15px; text-shadow: 1px 1px 0 var(--ink); }
+
+.buttons { flex: 1; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.meow { background: #ff8fa0; font-size: 22px; padding: 12px; flex: none; }
+.jump { flex: 1; min-height: 140px; position: relative; border-width: 5px; border-radius: 28px; box-shadow: 7px 7px 0 var(--ink);
+  background: radial-gradient(circle at 50% 45%, #fff36b 0, var(--yellow) 55%, #f0c800 100%); touch-action: none; overflow: hidden; }
+.jump.down { -webkit-transform: translate(5px, 5px) scale(.985); transform: translate(5px, 5px) scale(.985); box-shadow: 2px 2px 0 var(--ink); background: #ffd400; }
+.jump .lbl { position: absolute; left: 0; right: 0; bottom: 10%; font-family: var(--deco); font-size: clamp(34px, 11vw, 64px); color: var(--maroon); text-shadow: 2px 2px 0 var(--white); pointer-events: none; }
+.jump .paw { position: absolute; left: 50%; top: 40%; width: 34%; padding-top: 34%; -webkit-transform: translate(-50%, -50%); transform: translate(-50%, -50%); pointer-events: none;
+  background: radial-gradient(ellipse 34% 30% at 50% 66%, var(--maroon) 98%, transparent 100%),
+              radial-gradient(circle at 14% 30%, var(--maroon) 12%, transparent 13%),
+              radial-gradient(circle at 38% 12%, var(--maroon) 12%, transparent 13%),
+              radial-gradient(circle at 62% 12%, var(--maroon) 12%, transparent 13%),
+              radial-gradient(circle at 86% 30%, var(--maroon) 12%, transparent 13%); }
+.ko .jump { background: #c9c0ad; }
+.ko .jump .lbl { color: #6b5a48; }
+
+.banner { position: fixed; left: 50%; top: max(52px, calc(env(safe-area-inset-top) + 48px)); -webkit-transform: translateX(-50%); transform: translateX(-50%); z-index: 20; background: var(--maroon); color: var(--yellow); border: 3px solid var(--ink); border-radius: 14px; padding: 6px 14px; font-size: 15px; box-shadow: 3px 3px 0 var(--ink); text-align: center; max-width: 92%; }
+.help { position: fixed; left: 10px; right: 10px; bottom: max(10px, env(safe-area-inset-bottom)); z-index: 21; background: var(--paper); border: 3px solid var(--ink); border-radius: 14px; padding: 10px 12px; font-size: 14px; box-shadow: 4px 4px 0 var(--ink); line-height: 1.35; }
+.help b { color: var(--maroon); }
+.help button { margin-top: 6px; font-size: 14px; padding: 4px 10px; }
+
+@media (orientation: landscape) and (max-height: 500px) {
+  #pad { flex-direction: row; gap: 10px; }
+  #pad .who { width: 38%; flex-direction: column; text-align: center; justify-content: center; }
+  #pad .judge { position: absolute; left: 12px; bottom: 12px; width: 36%; }
+  .buttons { flex-direction: row-reverse; }
+  .meow { width: 30%; }
+  .logo { font-size: 20px; }
+}
+.hint { margin-top: 8px; background: #2b33a8; color: var(--yellow); border: 3px solid var(--ink); border-radius: 12px; padding: 6px 10px; text-align: center; font-size: 17px; box-shadow: 3px 3px 0 var(--ink); -webkit-animation: pop .3s; animation: pop .3s; }

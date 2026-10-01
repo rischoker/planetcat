@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gato Swing · Función de ritmo 1928</title>
+  <meta name="description" content="Juego de ritmo multijugador: salta los obstáculos que lanza el Gato-Rueda al compás de la música. Usa tu celular como control.">
+  <meta name="theme-color" content="#3e46c9">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/fonts.css">
+  <link rel="stylesheet" href="css/host.css">
+  <!-- Todo es local (sin CDN) para que funcione detrás de proxies que bloquean CDNs -->
+  <script src="config.js"></script>
+  <script src="vendor/peerjs.min.js"></script>
+  <script src="vendor/qrcode.min.js"></script>
+  <script type="importmap">
+    { "imports": { "three": "./vendor/three.module.min.js", "three/addons/": "./vendor/addons/" } }
+  </script>
+</head>
+<body>
+<div id="stage">
+  <canvas id="bg"></canvas>
+  <canvas id="gl"></canvas>
+  <canvas id="fx"></canvas>
+
+  <!-- CARGA -->
+  <div id="loading">
+    <h1>Gato Swing</h1>
+    <div class="bar"><div id="load-bar"></div></div>
+    <p id="load-text">Encendiendo el proyector…</p>
+    <noscript><p>Este juego necesita JavaScript.</p></noscript>
+  </div>
+
+  <!-- LOBBY -->
+  <div id="lobby" class="layer hidden">
+    <div class="marquee">
+      <div class="sub">★ FUNCIÓN DE RITMO · 1928 ★</div>
+      <h1>Gato Swing</h1>
+    </div>
+
+    <section class="card left">
+      <h2>¡Únete con tu celular!</h2>
+      <div class="qr-frame"><div id="qr"></div></div>
+      <div class="code-row">Código de sala <b id="room-code">····</b></div>
+      <div class="url" id="join-url"></div>
+      <div class="btn-row">
+        <button class="small" id="btn-copy">📋 Copiar enlace</button>
+        <button class="small alt" id="btn-newroom">🔄 Nueva sala</button>
+      </div>
+      <div class="net warn" id="net"><span class="dot"></span><span id="net-text">Conectando…</span></div>
+      <div class="diag" id="net-diag">Probando la red…</div>
+      <div class="hint">Escanea el QR o entra a la página y escribe el código.</div>
+    </section>
+
+    <section class="card right">
+      <h2>Reparto <span class="badge" id="pcount">0</span></h2>
+      <ul id="plist"></ul>
+      <div class="btn-row">
+        <button class="small alt" id="btn-bot">🤖 + Bot</button>
+        <button class="small alt" id="btn-kb1">⌨️ Teclado 1</button>
+        <button class="small alt" id="btn-kb2">⌨️ Teclado 2</button>
+      </div>
+      <div class="song">
+        <div class="row">🎵 <span class="name" id="song-name">W&amp;W</span>
+          <label class="btn small" for="file-song">Cargar MP3</label>
+          <input type="file" id="file-song" accept="audio/*,.mp3,.ogg,.wav,.m4a" hidden>
+          <button class="small alt" id="btn-default-song" title="Volver a la canción original">↺</button>
+        </div>
+        <div class="info" id="song-info">Analizando ritmo…</div>
+      </div>
+      <div class="diffs" id="diffs">
+        <button data-d="facil">Fácil</button>
+        <button data-d="normal" class="on">Normal</button>
+        <button data-d="dificil">Difícil</button>
+      </div>
+      <details class="adv">
+        <summary>Ajustes</summary>
+        <label>Volumen <input type="range" id="vol" min="0" max="1" step="0.05" value="0.8"></label>
+        <label>Retraso del audio <input type="range" id="latency" min="-150" max="350" step="10" value="0"><span id="latency-v">0 ms</span></label>
+        <label>Efectos de película <input type="checkbox" id="film" checked></label>
+      </details>
+      <button id="btn-start" disabled>¡Que empiece la función!</button>
+      <div class="keys">Teclado 1: Espacio salta (2 veces = doble salto) · M maúlla — Teclado 2: ↑ salta · N maúlla<br>H muestra hitboxes · Esc pausa</div>
+    </section>
+  </div>
+
+  <!-- HUD -->
+  <div id="hud" class="layer hidden">
+    <div class="top">
+      <div class="pill">Vivos <b id="hud-alive">0/0</b></div>
+      <div class="reel"><div id="hud-prog"></div></div>
+      <div class="pill">⚡ <b id="hud-speed">x1</b></div>
+      <div class="pill"><b id="hud-bpm">120</b> BPM · <span id="hud-diff">Normal</span></div>
+    </div>
+    <ol id="hud-scores"></ol>
+    <div class="room pill">Sala <b id="hud-room">····</b></div>
+  </div>
+
+  <div id="card"></div>
+
+  <!-- RESULTADOS -->
+  <div id="results" class="modal hidden">
+    <div class="paper">
+      <h1 class="fin">¡Fin!</h1>
+      <div class="winner" id="winner"></div>
+      <table class="rank"><thead><tr><th>#</th><th>Artista</th><th>Puntos</th><th>Combo</th><th>Perfectos</th></tr></thead><tbody id="rank"></tbody></table>
+      <div class="btn-row">
+        <button class="alt" id="btn-lobby">🏠 Volver al lobby</button>
+        <button class="red" id="btn-again">🔁 ¡Otra función!</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAUSA -->
+  <div id="pause" class="modal hidden">
+    <div class="paper">
+      <h1 class="fin">Intermedio</h1>
+      <p style="font-size:20px">La función se reanuda en un momento…</p>
+      <div class="btn-row">
+        <button class="alt" id="btn-quit">🏠 Terminar</button>
+        <button class="red" id="btn-resume">▶ Continuar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="hide"></div>
+</div>
+
+<script>
+  // Aviso si el navegador no soporta módulos / import maps (muy viejo)
+  window.__bootTimer = setTimeout(function () {
+    var t = document.getElementById('load-text');
+    if (t && !window.__booted) t.innerHTML = 'Tu navegador es muy antiguo para la pantalla del juego.<br>Usa Chrome, Edge, Firefox o Safari actualizados en el PC/TV.';
+  }, 15000);
+</script>
+<script type="module" src="js/host/main.js"></script>
+</body>
+</html>
