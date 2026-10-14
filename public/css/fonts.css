@@ -1,0 +1,4 @@
+/* Fuentes locales (no dependen de Google Fonts, que suele estar bloqueado por proxies) */
+@font-face { font-family: 'Limelight'; src: url('../fonts/limelight-latin-400-normal.woff2') format('woff2'), url('../fonts/limelight-latin-400-normal.woff') format('woff'); font-display: swap; }
+@font-face { font-family: 'Lilita One'; src: url('../fonts/lilita-one-latin-400-normal.woff2') format('woff2'), url('../fonts/lilita-one-latin-400-normal.woff') format('woff'); font-display: swap; }
+@font-face { font-family: 'Rye'; src: url('../fonts/rye-latin-400-normal.woff2') format('woff2'), url('../fonts/rye-latin-400-normal.woff') format('woff'); font-display: swap; }

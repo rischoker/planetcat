@@ -1,0 +1,21 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Generador de retratos · Gato Swing</title></head><body style="margin:0;font-family:sans-serif;background:#f6ead0"><h2 style="margin:12px">Retratos de personajes</h2><p style="margin:12px">Abre esta página desde el servidor (GitHub Pages o <code>npx serve</code>). Haz clic en cada imagen para descargarla y guárdala en <code>assets/portraits/&lt;id&gt;.png</code>.</p><div id="list" style="display:flex;flex-wrap:wrap;gap:10px;margin:12px"></div>
+<script type="importmap">{"imports":{"three":"../vendor/three.module.min.js","three/addons/":"../vendor/addons/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import {loadCharacters, CharacterActor, CHARACTERS} from '../js/host/characters.js';
+const S=256;const r=new THREE.WebGLRenderer({antialias:true,alpha:true,preserveDrawingBuffer:true});r.setSize(S,S);r.outputColorSpace=THREE.SRGBColorSpace;
+const T=await loadCharacters('../assets/characters/');
+const out={};
+for(const def of CHARACTERS){
+ const s=new THREE.Scene();s.add(new THREE.HemisphereLight(0xffffff,0x8890c0,1.7));const d=new THREE.DirectionalLight(0xffffff,2.3);d.position.set(6,14,12);s.add(d);
+ const a=new CharacterActor(T.get(def.id),0xffffff);a.ground.visible=false;s.add(a.group);a.faceTowards(1,0,true);a.heading=-1.0;a.facing.rotation.y=-1.0;
+ for(let i=0;i<4;i++)a.update(0.016,{mode:'idle',beat:0.05,beatIndex:0});
+ const box=new THREE.Box3().setFromObject(a.group);const c=box.getCenter(new THREE.Vector3());const sz=box.getSize(new THREE.Vector3());
+ const cam=new THREE.PerspectiveCamera(30,1,0.1,100);const dist=Math.max(sz.y,sz.x)*0.62/Math.tan(15*Math.PI/180);cam.position.set(c.x,c.y+0.2,dist);cam.lookAt(c.x,c.y,0);
+ // fondo: rayos azules
+ const bg=document.createElement('canvas');bg.width=bg.height=S;const g=bg.getContext('2d');g.fillStyle='#3e46c9';g.fillRect(0,0,S,S);g.fillStyle='rgba(110,120,255,.35)';for(let i=0;i<14;i++){const a0=i/14*Math.PI*2,a1=a0+Math.PI/14;g.beginPath();g.moveTo(S/2,S*0.9);g.lineTo(S/2+Math.cos(a0)*600,S*0.9+Math.sin(a0)*600);g.lineTo(S/2+Math.cos(a1)*600,S*0.9+Math.sin(a1)*600);g.fill();}
+ r.setClearColor(0,0);r.render(s,cam);g.drawImage(r.domElement,0,0);out[def.id]=bg.toDataURL('image/png');}
+const list=document.getElementById('list');
+for(const [id,url] of Object.entries(out)){const a=document.createElement('a');a.href=url;a.download=id+'.png';a.innerHTML=`<img src="${url}" width="128" height="128" style="border:3px solid #141414;border-radius:10px;display:block"><div style="text-align:center">${id}.png</div>`;list.appendChild(a);}
+window.out=out;window.done=true;
+</script></body></html>

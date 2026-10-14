@@ -1,1 +1,21 @@
-{"type":"module","private":true,"scripts":{"test":"node tests/chart.test.mjs"}}
+{
+  "name": "gato-swing",
+  "version": "4.0.0",
+  "private": true,
+  "description": "Gato Swing — juego de ritmo estilo caricatura 1928. Servidor Express + Socket.IO para Render: pantalla + celulares como control.",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "PORT=3000 node server.js",
+    "test": "node tests/chart.test.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "compression": "^1.7.5",
+    "express": "^4.21.2",
+    "socket.io": "4.8.1"
+  }
+}

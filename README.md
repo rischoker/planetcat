@@ -1,8 +1,34 @@
-# 🐱 Gato Swing — Función de ritmo 1928
+# 🐱 Gato Swing — Función de ritmo 1928 (versión Render)
 
-Juego de ritmo multijugador estilo **caricatura de los años 20** (rubber hose). Una cabeza de gato gigante es la *rueda* del escenario: gira, baila con sus patas de manguera, parpadea, mira los obstáculos y maúlla, mientras lanza **obstáculos 3D** que llegan **justo en el beat** de la canción, a veces de izquierda a derecha y a veces al revés. Los jugadores usan su **celular como control** y saltan al compás. **Eliminación directa**: un choque y quedas fuera; gana el último en pie (o el de más puntos si la canción termina).
+Juego de ritmo multijugador estilo **caricatura de los años 20**. Una cabeza de gato gigante es la *rueda* del escenario: gira, baila, siente emociones y lanza obstáculos 3D que llegan **justo en el ritmo** de la canción. Los jugadores usan su **celular como control**.
+
+Esta es la versión con **servidor propio en Render** (Express + Socket.IO), igual que Chicken Horde, Flappy Verbs y Castle Quest, pensada para la red restringida de la academia.
 
 ![concepto](docs/concepto.png)
+
+## Por qué Render (red de la academia)
+
+- Pantalla y celulares hablan con el **mismo dominio** (`*.onrender.com`) por HTTPS/443. Nada de WebRTC, STUN/TURN, PeerJS ni CDNs.
+- **Socket.IO empieza con HTTP long-polling** y sube a WebSocket solo si la red lo permite: funciona aunque el proxy bloquee WebSockets (probado).
+- Todas las librerías (Three.js, Socket.IO, QR) y fuentes están en `public/vendor` y `public/fonts`.
+- **Reconexión**: los celulares reintentan solos sin límite; vuelven con el mismo personaje y nombre (clave guardada en el celular).
+- **Si la pantalla se recarga**, recupera la misma sala con su token; los celulares vuelven solos.
+- **Si el servidor se reinicia** (deploy o el plan gratis se durmió), la pantalla pide su **mismo código** y los celulares que reintentan entran solos (probado: ~3 s).
+- Latidos cada segundo, sincronización de relojes y **compensación de lag** en los saltos (también a través del servidor).
+- iPhone: sin zoom por doble toque, alto real de pantalla, Wake Lock, reconexión al volver a la pestaña. Android viejo: el control es **ES5** y el cliente de Socket.IO también.
+- `GET /healthz` para el health check de Render.
+
+## Publicar en Render
+
+1. Crea un repositorio en GitHub (por ejemplo `rischoker/GatoSwing`) y sube **todo el contenido** de esta carpeta (no el zip).
+2. En Render: **New → Web Service** → conecta el repo.
+   - Runtime: **Node** · Build: `npm install` · Start: `npm start`
+   - Health check path: `/healthz`
+3. Listo: `https://TU-SERVICIO.onrender.com/` es la **pantalla** (proyector) y los celulares entran con el QR (`/play.html?room=CODIGO`).
+
+> Plan gratis de Render: el servicio se duerme tras ~15 min sin uso y tarda ~30–60 s en despertar. Abre la pantalla unos minutos antes de la clase (o usa un plan pago para evitarlo).
+
+Para probar en tu PC: `npm install && npm start` y abre `http://localhost:3000`.
 
 ## Cómo se juega
 
@@ -25,43 +51,6 @@ Juego de ritmo multijugador estilo **caricatura de los años 20** (rubber hose).
 
 En la pantalla: **H** muestra los hitboxes, **Esc/P** pausa (intermedio).
 
-## Publicar en GitHub Pages
-
-1. Sube todo el contenido de esta carpeta a un repositorio.
-2. *Settings → Pages → Deploy from branch → `main` / root*.
-3. Abre `https://TU_USUARIO.github.io/TU_REPO/`.
-
-No hay paso de compilación. Todo (Three.js, PeerJS, QR, fuentes) está en `vendor/` y `fonts/`, **sin CDN**, para que funcione detrás de proxies que bloquean CDNs o Google Fonts.
-
-Para probar en local: `npx serve .` (o `python3 -m http.server`) y abre `http://localhost:3000`. No funciona abriendo el archivo con doble clic (`file://`).
-
-## Red: reconexión, proxies, iPhone y Android viejos
-
-- **WebRTC (PeerJS)**: la señalización va por `wss://` en el puerto 443 (pasa por casi cualquier proxy); los datos van P2P.
-- **TURN por TCP/TLS 443** como respaldo cuando la red bloquea UDP (colegios, empresas, datos con CGNAT). El control alterna automáticamente a "solo TURN" cada 3 intentos fallidos.
-- **Reconexión automática sin límite** con espera creciente. Cada celular tiene una clave guardada: si se cae, se bloquea la pantalla o cambia de WiFi a datos, **vuelve con el mismo personaje y nombre**.
-- **Si la pantalla se recarga**, conserva el mismo código de sala y el mismo reparto; los celulares vuelven solos (en las pruebas: ~2 s).
-- **Latidos** cada segundo en ambos sentidos; si no hay respuesta en 5–6 s se reconecta.
-- **Compensación de lag**: el celular envía la hora exacta del toque; la pantalla sincroniza relojes (tipo NTP) y aplica el salto en el momento real (hasta 200 ms). Si un choque ocurre dentro de esa ventana, se re-simula antes de eliminar a nadie.
-- **iPhone**: sin zoom por doble toque, alto real de pantalla (`--vh`), áreas seguras (notch), `touchstart` sin retraso, Wake Lock para que no se apague la pantalla, reconexión al volver a la pestaña (`visibilitychange`, `pageshow`).
-- **Android viejo**: el control (`play.html` + `js/play.js`) está escrito en **ES5** y PeerJS se re-compiló a ES2017 (sin `?.`). Si el navegador no soporta WebRTC, lo dice claramente.
-- **Navegadores dentro de apps** (WhatsApp, Instagram, Facebook): se detectan y se sugiere abrir en Chrome/Safari.
-- **Diagnóstico** en el lobby: muestra si hay conexión local, STUN y TURN.
-
-### Configurar un TURN propio (recomendado para redes con proxy)
-
-Edita `config.js`:
-
-```js
-iceServers: [
-  { urls: ['stun:stun.l.google.com:19302'] },
-  { urls: ['turn:TU_SERVIDOR:3478', 'turns:TU_SERVIDOR:443?transport=tcp'], username: 'usuario', credential: 'clave' },
-],
-// o credenciales temporales de Metered Open Relay (20 GB/mes gratis):
-meteredTurn: { appName: 'tuapp', apiKey: 'TU_API_KEY' },
-```
-
-El TURN público incluido (`openrelay.metered.ca`) es "de mejor esfuerzo": puede estar saturado. También puedes usar tu propio servidor de señalización PeerJS (`peer: { host, port, path, secure }`).
 
 ## Ritmo y obstáculos
 
@@ -80,11 +69,11 @@ Cada obstáculo es una unión de primitivas (caja, círculo, triángulo). **Las 
 
 ```bash
 # test de partitura + hitboxes (necesita ffmpeg para convertir el audio)
-ffmpeg -i assets/audio/ww.mp3 -ac 1 -ar 11025 -f f32le /tmp/ww.f32
+ffmpeg -i public/assets/audio/ww.mp3 -ac 1 -ar 11025 -f f32le /tmp/ww.f32
 npm test -- /tmp/ww.f32
 ```
 
-Hay también un test de red de punta a punta (`tests/red.e2e.cjs`: dos celulares, reconexión, recarga del host y saltos con lag real).
+Hay también un test de red de punta a punta (`tests/red.e2e.cjs` y `tests/reinicio.e2e.cjs`).
 
 El test de partitura (3 dificultades × 3 semillas) verifica que todo grupo tenga ventana de despegue, que un jugador que sigue el plan (con doble salto cuando hace falta y patinando cada baranda) sobreviva **toda la canción en cualquier posición y carril**, que sin saltar se muera y que cada llegada caiga en el ritmo. También reporta la variedad: grupos de 1/2/3, medio carril, aceleraciones y cuánto varía el intervalo entre obstáculos.
 
@@ -92,28 +81,24 @@ El test de partitura (3 dificultades × 3 semillas) verifica que todo grupo teng
 
 Los modelos GLB no traen esqueleto: al cargarse se les quitan las piernas/brazos finitos y se les ponen **extremidades de manguera** con guantes blancos y zapatos, animadas por código (caminar, correr, saltar con *squash & stretch*, bailar al beat en el lobby y salir volando en K.O.).
 
-**Agregar un personaje:** copia `nuevo.glb` en `assets/characters/`, agrégalo a `CHARACTERS` en `js/host/characters.js` y genera su retrato abriendo `tools/retratos.html` desde el servidor (guárdalo en `assets/portraits/nuevo.png`).
+**Agregar un personaje:** copia `nuevo.glb` en `public/assets/characters/`, agrégalo a `CHARACTERS` en `public/js/host/characters.js` y genera su retrato abriendo `/tools/retratos.html` en el servidor (guárdalo en `public/assets/portraits/nuevo.png`).
+
 
 ## Estructura
 
 ```
-index.html            pantalla (host): lobby, juego, resultados
-play.html             control del celular
-config.js             red (STUN/TURN/servidor PeerJS)
-js/host/main.js       arranque + interfaz
-js/host/game.js       lógica del juego, física, bots, lag
-js/host/net.js        red del host (PeerJS + BroadcastChannel)
-js/host/cat.js        el Gato-Rueda (cara 2D, orejas, brazos que bailan)
-js/host/characters.js personajes 3D + extremidades de manguera
-js/host/obstacles3d.js mallas de obstáculos desde los hitboxes
-js/host/physics.js    física y colisiones compartidas
-js/host/catalog.js    tipos de obstáculo (perfiles de colisión)
-js/host/chart.js      generador de partitura rítmica
-js/host/beat-analysis.js / beat-worker.js  detección de tempo/beats
-js/host/fx.js         placas de nombre, efectos de película, iris
-js/play.js            control (ES5)
-tests/chart.test.mjs  test de ritmo + hitboxes
-tools/retratos.html   generador de retratos
+server.js              servidor Express + Socket.IO (salas, reconexión, /healthz)
+package.json
+public/index.html      pantalla (host): lobby, juego, resultados
+public/play.html       control del celular
+public/config.js       ajustes (latido)
+public/js/host/net.js  red de la pantalla (Socket.IO)
+public/js/play.js      control del celular (ES5, Socket.IO)
+public/js/host/*.js    juego, física, partitura, gato, personajes, efectos
+public/vendor/         three.js, socket.io, qrcode (locales)
+tests/chart.test.mjs   test de ritmo + hitboxes
+tests/red.e2e.cjs      prueba de red (BLOCK_WS=1 simula el proxy)
+tests/reinicio.e2e.cjs prueba de reinicio del servidor
 ```
 
 Ver [CREDITS.md](CREDITS.md) para licencias.

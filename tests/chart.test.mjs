@@ -12,9 +12,9 @@
 //   - y reporta variedad: patrones de 1/2/3, medio carril, aceleraciones.
 // =====================================================================
 import fs from 'fs';
-import { analyzeBeats } from '../js/host/beat-analysis.js';
-import { generateChart, playerSpacing, changeAt, laneHits } from '../js/host/chart.js';
-import { PHYS, hitTest, heightAt, makeTraj, landTime, overRail } from '../js/host/physics.js';
+import { analyzeBeats } from '../public/js/host/beat-analysis.js';
+import { generateChart, playerSpacing, changeAt, laneHits } from '../public/js/host/chart.js';
+import { PHYS, hitTest, heightAt, makeTraj, landTime, overRail } from '../public/js/host/physics.js';
 
 const f = process.argv[2];
 if (!f) { console.log('uso: node tests/chart.test.mjs audio.f32'); process.exit(2); }

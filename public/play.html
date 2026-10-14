@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="theme-color" content="#3e46c9">
+  <title>Gato Swing · Control</title>
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/portraits/aguacate.png">
+  <link rel="stylesheet" href="css/fonts.css">
+  <link rel="stylesheet" href="css/play.css">
+</head>
+<body>
+  <div id="app">
+    <header id="top">
+      <div class="logo">Gato Swing</div>
+      <div id="net" class="net warn"><span class="dot"></span><span id="net-text">Iniciando…</span></div>
+    </header>
+
+    <!-- Unirse (si no vino con ?room=) -->
+    <section id="join" class="screen hidden">
+      <div class="paper">
+        <h1>¡A escena!</h1>
+        <label>Código de sala
+          <input id="in-room" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCD">
+        </label>
+        <label>Tu nombre
+          <input id="in-name" maxlength="14" autocomplete="nickname" placeholder="Gato Gamer">
+        </label>
+        <button id="btn-join" class="big">¡Entrar!</button>
+      </div>
+    </section>
+
+    <!-- Control -->
+    <section id="pad" class="screen hidden">
+      <div class="who">
+        <div id="por" class="por"></div>
+        <div class="info">
+          <div class="name-row"><b id="my-name">…</b><button id="btn-edit" class="tiny" aria-label="Cambiar nombre">✎</button></div>
+          <small id="my-char">Esperando personaje…</small>
+          <div id="status" class="status">Conectando con la pantalla…</div>
+        </div>
+      </div>
+      <div id="hint" class="hint hidden"></div>
+      <div id="judge" class="judge"><span id="judge-text">¡Listo!</span><small id="score">0 pts</small></div>
+      <div class="buttons">
+        <button id="btn-meow" class="meow">🐾 ¡MIAU!</button>
+        <button id="btn-jump" class="jump"><span class="paw"></span><span class="lbl">¡SALTA!</span></button>
+      </div>
+    </section>
+
+    <!-- Mensajes grandes -->
+    <section id="msg" class="screen hidden">
+      <div class="paper">
+        <h1 id="msg-title">Ups</h1>
+        <p id="msg-text"></p>
+        <button id="msg-btn" class="big">Reintentar</button>
+      </div>
+    </section>
+
+    <div id="banner" class="banner hidden"></div>
+    <div id="help" class="help hidden"></div>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="vendor/socket.io.min.js"></script>
+  <script src="js/play.js"></script>
+</body>
+</html>
