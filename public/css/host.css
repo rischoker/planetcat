@@ -185,13 +185,3 @@ table.rank td:first-child { font-family: var(--deco); }
 .lanes-legend { display: flex; gap: 6px; }
 .lanes-legend span { border: 2px solid var(--ink); border-radius: 8px; padding: 0 6px; font-size: 14px; color: #fff; text-shadow: 1px 1px 0 var(--ink); }
 #hud-scores .h { color: var(--red); font-size: 13px; letter-spacing: -1px; }
-
-/* ---------- ranking global */
-.global { margin-top: 10px; background: var(--white); border: 3px solid var(--ink); border-radius: 12px; padding: 6px 10px; font-size: 14px; }
-.global h3 { margin: 0 0 4px; font-size: 15px; color: var(--maroon); }
-.global h3 small { color: #6b5a48; font-weight: 400; }
-.global ol { margin: 0; padding-left: 22px; }
-.global li { display: flex; justify-content: space-between; gap: 8px; }
-.global li span { font-weight: 700; }
-.global .gl-msg { color: #6b5a48; font-size: 13px; }
-td.gl { white-space: nowrap; }

@@ -290,16 +290,11 @@ export class Game {
     const mode = ch.mode || 'classic';
     this.players.forEach((p) => {
       if (p.waiting || !p.remote || !p.alive) return;
-      this.ui.sendTo(p, this.modeMsg(p, mode));
+      const msg = { t: 'mode', mode };
+      if (mode === 'tambor' && STEM_INFO[p.laneName]) { msg.lane = p.laneName; msg.label = STEM_INFO[p.laneName].icon + ' ' + STEM_INFO[p.laneName].label; msg.color = STEM_INFO[p.laneName].color; }
+      if (mode === 'pista') { msg.lane = p.laneIdx; msg.color = LANE_COLORS[p.laneIdx]; }
+      this.ui.sendTo(p, msg);
     });
-  }
-  /** Mensaje de modo para un celular (también se manda al reconectar). */
-  modeMsg(p, mode) {
-    mode = mode || this.mode;
-    const msg = { t: 'mode', mode };
-    if (mode === 'tambor' && STEM_INFO[p.laneName]) { msg.lane = p.laneName; msg.label = STEM_INFO[p.laneName].icon + ' ' + STEM_INFO[p.laneName].label; msg.color = STEM_INFO[p.laneName].color; }
-    if (mode === 'pista') { msg.lane = p.laneIdx; msg.color = LANE_COLORS[p.laneIdx]; }
-    return msg;
   }
 
   /** Cambiar de carril en la pista (◀ ▶). */

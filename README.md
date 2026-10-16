@@ -127,10 +127,3 @@ En una canción con STEMS el gato cambia de modo según la sección:
 Cada jugador tiene **3 vidas**; gana el mejor puntaje. "Cargar MP3" sigue funcionando como modo libre (análisis automático, eliminación directa).
 
 Pruebas: `node tests/stem.test.mjs public/songs/w-w/chart.json`
-
-## Ranking global (Supabase, pasando por Render)
-
-- Tabla `gato_swing_scores` en el proyecto de Supabase "chicken horde leaderboard" (RLS: cualquiera lee; insertar solo con valores válidos).
-- La pantalla **nunca** habla directo con supabase.co: usa `GET/POST /api/scores` de este mismo servidor (mismo dominio de Render → pasa el proxy de la academia).
-- Variables opcionales en Render: `SUPABASE_URL`, `SUPABASE_KEY` (si no están, usa las del código; la clave es la pública).
-- Se guardan solo personas (no bots) con puntaje > 0, por canción y dificultad. Si no hay red, quedan en cola en el PC de la pantalla y se reenvían solas.

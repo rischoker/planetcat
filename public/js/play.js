@@ -143,11 +143,7 @@
       $('my-char').textContent = 'Tu personaje: ' + (d.charName || d.char) + ' · Sala ' + d.room;
       $('por').style.backgroundImage = 'url(assets/portraits/' + d.char + '.png)';
       document.documentElement.style.setProperty('--accent', d.color || '#ff3b4e');
-      if (d.lives !== undefined) me.lives = d.lives;
-      setPhase(d.phase, me.alive, d);
-      if (d.modeMsg) setMode(d.modeMsg);
-      if (d.score !== undefined) { $('score').setAttribute('data-pts', d.score); $('score').textContent = d.score + ' pts'; }
-      showLives();
+      setPhase(d.phase, me.alive);
       show('pad');
       return;
     }
@@ -160,7 +156,6 @@
     }
     if (d.t === 'hint') { hint(d.text); vibrate([20, 30, 20]); return; }
     if (d.t === 'mode') { setMode(d); return; }
-    if (d.t === 'global') { hint(d.rank === 1 ? '🏆 ¡RÉCORD MUNDIAL! Eres el #1' : '🌍 Quedaste #' + d.rank + ' en el ranking global'); if (d.rank === 1) vibrate([80, 40, 80, 40, 300]); return; }
     if (d.t === 'lane') { if (d.color) $('mode').style.setProperty('--lane', d.color); return; }
     if (d.t === 'hit') { me.lives = d.lives; vibrate([60, 30, 60]); judge(d.lives === 1 ? '¡ÚLTIMA VIDA!' : '¡AY! -1 ♥', null); showLives(); return; }
     if (d.t === 'ko') { vibrate([80, 40, 160]); me.alive = false; setPhase('ko', false, d); return; }
