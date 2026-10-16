@@ -271,3 +271,47 @@ export function buildRailParts(ev, depth, PHYS) {
   }
   return parts;
 }
+
+// ---------------------------------------------------------------------
+//  BARANDA RECTA para la pista: una sola pieza larga. Frente en z = 0 y
+//  cuerpo hacia el fondo (−z). Pinchos en sierra debajo (mismo perfil que
+//  railPrims: dientes de 0.55 de ancho y SPIKE_H de alto).
+// ---------------------------------------------------------------------
+export function buildRailStraight(ev, width, PHYS) {
+  const g = new THREE.Group();
+  const L = ev.railL;
+  const metal = new THREE.MeshToonMaterial({ color: 0xc9ced8, gradientMap: toonGradient() });
+  const metalDark = new THREE.MeshToonMaterial({ color: 0x6b7280, gradientMap: toonGradient() });
+  const stripe = stripeTex('railStripeP', '#141414', '#ffe600', 8, true);
+  for (const x of [width * 0.33, -width * 0.33]) {
+    const bar = new THREE.CylinderGeometry(0.075, 0.075, L, 10);
+    bar.rotateX(Math.PI / 2); bar.translate(x, PHYS.RAIL_H - 0.075, -L / 2);
+    add(g, bar, metal, 0.02);
+  }
+  const plankMat = new THREE.MeshToonMaterial({ map: stripe.clone(), gradientMap: toonGradient() });
+  plankMat.map.repeat.set(1, Math.max(1, L / 1.2)); plankMat.map.needsUpdate = true;
+  const plank = new THREE.BoxGeometry(width * 0.66, 0.07, L);
+  plank.translate(0, PHYS.RAIL_H - 0.05, -L / 2);
+  add(g, plank, plankMat, 0.015);
+  // pinchos en sierra
+  const sw = 0.55, n = Math.max(1, Math.floor((L - 0.2) / sw));
+  const shape = new THREE.Shape();
+  shape.moveTo(0, 0);
+  for (let k = 0; k < n; k++) { const z0 = 0.1 + k * sw; shape.lineTo(z0 + sw / 2, PHYS.SPIKE_H); shape.lineTo(z0 + sw, 0); }
+  shape.lineTo(0, 0);
+  const sg = new THREE.ExtrudeGeometry(shape, { depth: width * 0.9, bevelEnabled: false });
+  // shape: x = distancia hacia el fondo, y = alto → girar para que x vaya a −z
+  sg.rotateY(Math.PI / 2); sg.translate(-width * 0.45, 0, 0);
+  g.add(new THREE.Mesh(sg, new THREE.MeshToonMaterial({ map: stripeTex('spike', '#d81e2b', '#fff3d6', 6, true), gradientMap: toonGradient() })));
+  // postes
+  for (const z of [0, -L]) {
+    for (const x of [width * 0.33, -width * 0.33]) {
+      const post = new THREE.BoxGeometry(0.16, PHYS.RAIL_H, PHYS.POST_HW * 2);
+      post.translate(x, PHYS.RAIL_H / 2, z);
+      add(g, post, metalDark, 0.02);
+      const cap = new THREE.SphereGeometry(0.11, 10, 8); cap.translate(x, PHYS.RAIL_H, z);
+      add(g, cap, new THREE.MeshToonMaterial({ color: 0xd81e2b, gradientMap: toonGradient() }), 0.015);
+    }
+  }
+  return g;
+}

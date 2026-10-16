@@ -76,3 +76,11 @@ input { display: block; width: 100%; margin-top: 4px; font-family: var(--ui); fo
   .logo { font-size: 20px; }
 }
 .hint { margin-top: 8px; background: #2b33a8; color: var(--yellow); border: 3px solid var(--ink); border-radius: 12px; padding: 6px 10px; text-align: center; font-size: 17px; box-shadow: 3px 3px 0 var(--ink); -webkit-animation: pop .3s; animation: pop .3s; }
+
+/* modos (canciones con STEMS) */
+.row-play { flex: 1; display: flex; gap: 8px; min-height: 0; }
+.row-play .jump { flex: 1; }
+.arrow { flex: none; width: 24%; font-size: clamp(36px, 12vw, 64px); background: var(--cream); border-width: 4px; border-radius: 22px; touch-action: none; padding: 0; }
+.arrow.down { -webkit-transform: translate(4px, 4px); transform: translate(4px, 4px); box-shadow: 1px 1px 0 var(--ink); background: var(--yellow); }
+.mode { margin: 0 0 8px; text-align: center; background: var(--paper); border: 3px solid var(--ink); border-radius: 12px; padding: 5px 8px; font-size: 18px; box-shadow: 3px 3px 0 var(--ink); border-left: 14px solid var(--lane, var(--accent)); }
+.lives { color: var(--red); letter-spacing: 2px; text-shadow: 1px 1px 0 var(--ink); }

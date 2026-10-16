@@ -221,7 +221,7 @@ export class FX {
     ctx.font = `${fs}px ${FONT_UI}`;
     const placed = [];
     const items = plates.map((p) => {
-      const label = p.name + (p.connected === false ? ' ⚡' : '');
+      const label = p.name + (p.connected === false ? ' ⚡' : '') + (p.lives !== undefined ? ' ' + '♥'.repeat(Math.max(0, p.lives)) : '');
       const w = ctx.measureText(label).width + fs * 1.9;
       const h = fs * 1.6;
       return { p, label, w, h };

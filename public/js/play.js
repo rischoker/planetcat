@@ -143,7 +143,11 @@
       $('my-char').textContent = 'Tu personaje: ' + (d.charName || d.char) + ' · Sala ' + d.room;
       $('por').style.backgroundImage = 'url(assets/portraits/' + d.char + '.png)';
       document.documentElement.style.setProperty('--accent', d.color || '#ff3b4e');
-      setPhase(d.phase, me.alive);
+      if (d.lives !== undefined) me.lives = d.lives;
+      setPhase(d.phase, me.alive, d);
+      if (d.modeMsg) setMode(d.modeMsg);
+      if (d.score !== undefined) { $('score').setAttribute('data-pts', d.score); $('score').textContent = d.score + ' pts'; }
+      showLives();
       show('pad');
       return;
     }
@@ -155,10 +159,37 @@
       return;
     }
     if (d.t === 'hint') { hint(d.text); vibrate([20, 30, 20]); return; }
+    if (d.t === 'mode') { setMode(d); return; }
+    if (d.t === 'global') { hint(d.rank === 1 ? '🏆 ¡RÉCORD MUNDIAL! Eres el #1' : '🌍 Quedaste #' + d.rank + ' en el ranking global'); if (d.rank === 1) vibrate([80, 40, 80, 40, 300]); return; }
+    if (d.t === 'lane') { if (d.color) $('mode').style.setProperty('--lane', d.color); return; }
+    if (d.t === 'hit') { me.lives = d.lives; vibrate([60, 30, 60]); judge(d.lives === 1 ? '¡ÚLTIMA VIDA!' : '¡AY! -1 ♥', null); showLives(); return; }
     if (d.t === 'ko') { vibrate([80, 40, 160]); me.alive = false; setPhase('ko', false, d); return; }
     if (d.t === 'kicked') { fatalMsg('Fuera del reparto', 'La pantalla te sacó de la sala.', true); return; }
     if (d.t === 'full') { fatalMsg('Sala llena', 'Ya no caben más artistas en esta función.', true); return; }
     if (d.t === 'hostbye') { connected = false; setNet('warn', 'La pantalla se cerró'); banner('🎬 La pantalla se cerró o se recargó… esperando'); return; }
+  }
+
+  // ------------------------------------------------- modos del gato (STEMS)
+  var curMode = null;
+  function setMode(d) {
+    curMode = d.mode;
+    var m = $('mode'), pista = d.mode === 'pista';
+    $('btn-left').classList[pista ? 'remove' : 'add']('hidden');
+    $('btn-right').classList[pista ? 'remove' : 'add']('hidden');
+    if (!d.mode || d.mode === 'classic') { m.classList.add('hidden'); return; }
+    var txt = d.mode === 'tambor' ? '🥁 TAMBOR · tu instrumento: <b>' + (d.label || '') + '</b>'
+      : d.mode === 'serpiente' ? '🐍 SERPIENTE · ¡salta al ritmo!'
+      : '🛹 PISTA · ◀ ▶ cambia de carril · mantén = patinar';
+    m.innerHTML = txt;
+    m.style.setProperty('--lane', d.color || '');
+    m.classList.remove('hidden');
+    vibrate(20);
+  }
+  function showLives() {
+    if (me.lives === undefined || me.lives === null) return;
+    var h = ''; for (var i = 0; i < me.lives; i++) h += '♥';
+    var sc = $('score'); var base = (sc.getAttribute('data-pts') || '0') + ' pts';
+    sc.innerHTML = base + (h ? ' · <span class="lives">' + h + '</span>' : '');
   }
 
   function markConnected() {
@@ -172,6 +203,7 @@
 
   function setPhase(phase, alive, d) {
     me.phase = phase; me.alive = alive;
+    if (d && d.lives !== undefined && d.lives !== null) me.lives = d.lives; else if (phase === 'lobby') me.lives = undefined;
     var pad = $('pad');
     pad.classList.toggle('ko', phase === 'ko' || (phase === 'playing' && !alive) || phase === 'spectate');
     var st = $('status');
@@ -180,6 +212,7 @@
     if (phase === 'lobby') { st.textContent = '🎟️ En el lobby · ¡prueba a saltar! (toca 2 veces = doble salto)'; judge('¡Listo!', null); }
     else if (phase === 'countdown') { st.textContent = '🎬 ¡Empieza la función!'; judge('3… 2… 1…', 0); }
     else if (phase === 'playing') st.textContent = alive ? '🎵 ¡Salta al ritmo!' : '💫 Fuera de juego';
+    if (phase !== 'playing' && phase !== 'countdown') setMode({ mode: null });
     else if (phase === 'spectate') st.textContent = '⏳ Entras en la próxima función';
     else if (phase === 'ko') { st.textContent = '💫 ¡K.O.! Puesto ' + (d && d.place ? d.place : '?') + ' · ¡maúlla para animar!'; judge('¡K.O.!', d && d.score); }
     else if (phase === 'results') {
@@ -201,7 +234,7 @@
     var el = $('judge-text');
     el.textContent = text;
     el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
-    if (score !== null && score !== undefined) $('score').textContent = score + ' pts';
+    if (score !== null && score !== undefined) { $('score').setAttribute('data-pts', score); $('score').textContent = score + ' pts'; showLives(); }
   }
 
   // ------------------------------------------------------------- botones
@@ -242,6 +275,8 @@
   }, function () {
     send({ t: 'up', c: now() });
   });
+  bindPress($('btn-left'), function () { send({ t: 'lane', d: -1, c: now() }); vibrate(8); });
+  bindPress($('btn-right'), function () { send({ t: 'lane', d: 1, c: now() }); vibrate(8); });
   bindPress($('btn-meow'), function () {
     send({ t: 'meow' });
     try {
@@ -259,6 +294,8 @@
     if (e.target && e.target.tagName === 'INPUT') return;
     if (e.keyCode === 32 || e.keyCode === 38) { e.preventDefault(); if (!e.repeat) send({ t: 'jump', c: now(), s: ++seq }); }
     if (e.keyCode === 77) send({ t: 'meow' });
+    if (e.keyCode === 37 || e.keyCode === 65) send({ t: 'lane', d: -1, c: now() });
+    if (e.keyCode === 39 || e.keyCode === 68) send({ t: 'lane', d: 1, c: now() });
   });
 
   $('btn-edit').addEventListener('click', function () {

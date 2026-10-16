@@ -170,3 +170,28 @@ table.rank td:first-child { font-family: var(--deco); }
   #lobby { overflow: auto; padding-top: 18vh; }
   .marquee { position: absolute; }
 }
+
+/* ---------- canciones con STEMS y modos */
+.stems { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.stems:empty { display: none; }
+.stems button { font-size: 14px; padding: 4px 10px; background: var(--cream); }
+.stems button.on { background: var(--yellow); }
+.stems button small { display: block; font-size: 11px; color: #6b5a48; }
+.sign.mode { top: 12vh; flex-direction: column; gap: 2px; padding: 12px 34px; font-size: clamp(30px, 5vw, 76px); }
+.sign.mode small { font-family: var(--ui); font-size: .38em; -webkit-text-stroke: 0; color: var(--yellow); text-shadow: 2px 2px 0 var(--ink); }
+.sign.mode.tambor { background-color: #b8262f; }
+.sign.mode.serpiente { background-color: #1f7f4a; }
+.sign.mode.pista { background-color: #2b33a8; }
+.lanes-legend { display: flex; gap: 6px; }
+.lanes-legend span { border: 2px solid var(--ink); border-radius: 8px; padding: 0 6px; font-size: 14px; color: #fff; text-shadow: 1px 1px 0 var(--ink); }
+#hud-scores .h { color: var(--red); font-size: 13px; letter-spacing: -1px; }
+
+/* ---------- ranking global */
+.global { margin-top: 10px; background: var(--white); border: 3px solid var(--ink); border-radius: 12px; padding: 6px 10px; font-size: 14px; }
+.global h3 { margin: 0 0 4px; font-size: 15px; color: var(--maroon); }
+.global h3 small { color: #6b5a48; font-weight: 400; }
+.global ol { margin: 0; padding-left: 22px; }
+.global li { display: flex; justify-content: space-between; gap: 8px; }
+.global li span { font-weight: 700; }
+.global .gl-msg { color: #6b5a48; font-size: 13px; }
+td.gl { white-space: nowrap; }

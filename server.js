@@ -29,6 +29,83 @@ app.use(compression());
 app.get('/healthz', (req, res) => {
   res.set('Cache-Control', 'no-store').json({ ok: true, game: 'gato-swing', uptime: Math.round((Date.now() - started) / 1000), rooms: rooms.size, sockets: io.engine.clientsCount });
 });
+// ---- Ranking global (Supabase) ---------------------------------------------
+// La pantalla y los celulares SOLO hablan con este servidor (mismo dominio de
+// Render): el proxy de la academia no necesita dejar pasar supabase.co.
+const SB_URL = process.env.SUPABASE_URL || 'https://vjbcqhkfvctzwecmzcqa.supabase.co';
+const SB_KEY = process.env.SUPABASE_KEY || 'sb_publishable_mJlZ7Ym9LXAhTkWncksX6A_Czg0mbv6'; // clave pública (RLS protege la tabla)
+const SB_TABLE = 'gato_swing_scores';
+const DIFFS = ['facil', 'normal', 'dificil'];
+const topCache = new Map();   // song|diff -> { t, rows }
+const postLimit = new Map();  // ip -> [tiempos]
+
+async function sb(pathAndQuery, opts = {}) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 7000);
+  try {
+    const r = await fetch(SB_URL + '/rest/v1/' + pathAndQuery, {
+      method: opts.method || 'GET', signal: ctl.signal,
+      headers: Object.assign({ apikey: SB_KEY, 'Content-Type': 'application/json' }, opts.headers || {}),
+      body: opts.body ? JSON.stringify(opts.body) : undefined,
+    });
+    if (!r.ok) throw new Error('supabase ' + r.status + ' ' + (await r.text()).slice(0, 200));
+    return r;
+  } finally { clearTimeout(timer); }
+}
+const cleanText = (v, n) => String(v == null ? '' : v).replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, n);
+const int = (v, lo, hi) => Math.max(lo, Math.min(hi, Math.round(Number(v) || 0)));
+
+async function top(song, diff) {
+  const key = song + '|' + diff;
+  const c = topCache.get(key);
+  if (c && Date.now() - c.t < 20000) return c.rows;
+  const q = `${SB_TABLE}?select=name,char,points,max_combo,perfects,survived,created_at&song=eq.${encodeURIComponent(song)}&difficulty=eq.${diff}&order=points.desc&limit=10`;
+  const rows = await (await sb(q)).json();
+  topCache.set(key, { t: Date.now(), rows });
+  return rows;
+}
+async function rankOf(song, diff, points) {
+  const q = `${SB_TABLE}?select=id&song=eq.${encodeURIComponent(song)}&difficulty=eq.${diff}&points=gt.${points}`;
+  const r = await sb(q, { headers: { Prefer: 'count=exact', Range: '0-0' } });
+  const cr = r.headers.get('content-range') || '';   // "0-0/123" o "*/0"
+  const n = parseInt(cr.split('/')[1], 10);
+  return (isNaN(n) ? 0 : n) + 1;
+}
+
+app.get('/api/scores', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const song = cleanText(req.query.song, 60), diff = DIFFS.includes(req.query.difficulty) ? req.query.difficulty : 'normal';
+  if (!song) return res.status(400).json({ ok: false });
+  try { res.json({ ok: true, rows: await top(song, diff) }); }
+  catch (e) { console.warn('[ranking] lectura', e.message); res.json({ ok: false, rows: [] }); }
+});
+
+app.post('/api/scores', express.json({ limit: '32kb' }), async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+  const now = Date.now();
+  const hits = (postLimit.get(ip) || []).filter((t) => now - t < 60000);
+  if (hits.length >= 6) return res.status(429).json({ ok: false, error: 'muy seguido' });
+  hits.push(now); postLimit.set(ip, hits);
+  const b = req.body || {};
+  const song = cleanText(b.song, 60), diff = DIFFS.includes(b.difficulty) ? b.difficulty : 'normal';
+  const players = Array.isArray(b.players) ? b.players.slice(0, 32) : [];
+  const rows = players.map((p) => ({
+    name: cleanText(p.name, 16) || 'Gato', char: cleanText(p.char, 30) || null,
+    song, song_title: cleanText(b.songTitle, 80) || song, difficulty: diff,
+    points: int(p.points, 0, 2000000), max_combo: int(p.maxCombo, 0, 5000), perfects: int(p.perfects, 0, 5000),
+    lives_left: int(p.livesLeft, 0, 3), survived: !!p.survived,
+  })).filter((r) => r.points > 0);
+  if (!song || !rows.length) return res.json({ ok: true, ranks: [] });
+  try {
+    await sb(SB_TABLE, { method: 'POST', body: rows, headers: { Prefer: 'return=minimal' } });
+    topCache.delete(song + '|' + diff);
+    const ranks = await Promise.all(rows.map((r) => rankOf(song, diff, r.points).catch(() => null)));
+    const best = await top(song, diff).catch(() => []);
+    res.json({ ok: true, ranks: rows.map((r, i) => ({ name: r.name, points: r.points, rank: ranks[i] })), top: best });
+  } catch (e) { console.warn('[ranking] guardar', e.message); res.json({ ok: false, ranks: [] }); }
+});
+
 app.get('/host', (req, res) => res.redirect('/'));
 app.get('/play', (req, res) => res.redirect('/play.html' + (req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '')));
 

@@ -169,5 +169,7 @@ export class AudioEngine {
   tick(high) { this._osc('square', high ? 1046 : 784, 0, 0.09, 0.08); }
   screech() { this._noise(0.5, 0.18, 3000, 600); this._osc('sawtooth', 900, 300, 0.45, 0.04); }
   fanfare() { [523, 659, 784, 1046].forEach((f, i) => this._osc('triangle', f, 0, 0.25, 0.12, i * 0.13)); }
+  laneMove() { this._osc('triangle', 520, 780, 0.06, 0.05); }
+  coin() { this._osc('square', 1568, 0, 0.06, 0.04); this._osc('square', 2093, 0, 0.1, 0.04, 0.05); }
   spring() { this._osc('sine', 200, 900, 0.12, 0.05); this._osc('sine', 900, 400, 0.1, 0.03, 0.1); }
 }

@@ -6,8 +6,10 @@ import { PHYS, hitTest, heightAt, landTime, makeTraj, reachOf, overRail } from '
 import { generateChart, dirAt, changeAt, playerSpacing, laneHits } from './chart.js';
 import { CatWheel, PAL } from './cat.js';
 import { CharacterActor, CHARACTERS, CHAR_HEIGHT } from './characters.js';
-import { buildObstacleMesh, buildHitboxMesh, buildRailParts } from './obstacles3d.js';
+import { buildObstacleMesh, buildHitboxMesh, buildRailParts, buildRailStraight } from './obstacles3d.js';
 import { FX } from './fx.js';
+import { STEM_LANES, STEM_INFO, MODE_INFO, TRACK, LANE_COLORS } from './stemchart.js';
+import { Track, laneX, PISTA_CAT } from './track.js';
 
 export const PLAYER_COLORS = ['#ff3b4e', '#22d3ee', '#a3e635', '#ff9f1c', '#e879f9', '#ffffff', '#fb7185', '#2dd4bf', '#facc15', '#a78bfa', '#4ade80', '#f97316'];
 
@@ -27,20 +29,42 @@ export const SLANG = ['¡COOL!', '¡SUPERFLY!', '¡FRESH!', '¡FUNKY!', '¡DOPE!
 export const GRIND_SLANG = ['¡GRIND!', '¡SUPERFLY!', '¡SMOOTH!', '¡RADICAL!', '¡FLY!', '¡SICK!'];
 
 /** Genera la partitura en un Worker (no congela la pantalla). */
-function makeChartAsync(analysis, opts) {
+function makeChartAsync(analysis, opts, stemSong) {
   return new Promise((resolve) => {
     let w = null;
     try { w = new Worker(new URL('./chart-worker.js', import.meta.url), { type: 'module' }); } catch (e) { w = null; }
-    const sync = () => setTimeout(() => resolve(generateChart(analysis, opts)), 20);
+    const sync = () => setTimeout(async () => {
+      if (stemSong) { const m = await import('./stemchart.js'); resolve(m.makeStemChart(stemSong, opts)); }
+      else resolve(generateChart(analysis, opts));
+    }, 20);
     if (!w) return sync();
     let done = false;
     const timer = setTimeout(() => { if (!done) { done = true; w.terminate(); sync(); } }, 20000);
     w.onmessage = (e) => { if (done) return; done = true; clearTimeout(timer); w.terminate(); if (e.data && e.data.ok) resolve(e.data.chart); else sync(); };
     w.onerror = () => { if (done) return; done = true; clearTimeout(timer); w.terminate(); sync(); };
-    w.postMessage({ an: analysis, opts });
+    w.postMessage(stemSong ? { stem: stemSong, opts } : { an: analysis, opts });
   });
 }
 const tmpV = new THREE.Vector3();
+const tmpW = new THREE.Vector3();
+const PISTA_IDX = (c) => { const l = c.members[0] && c.members[0].lane; return l && l[0] === 'L' ? +l.slice(1) : -1; };
+const easeIO = (k) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
+/** z del carril de un instrumento sobre la rueda (batería adelante → otros atrás). */
+const stemZ = (name) => { const i = STEM_LANES.indexOf(name); return i < 0 ? 0 : DEPTH * (3 / 8 - i / 4); };
+const coinTexCache = new Map();
+function coinTexture(color) {
+  if (coinTexCache.has(color)) return coinTexCache.get(color);
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d');
+  g.fillStyle = '#141414'; g.beginPath(); g.arc(64, 64, 58, 0, Math.PI * 2); g.fill();
+  g.fillStyle = color; g.beginPath(); g.arc(64, 64, 49, 0, Math.PI * 2); g.fill();
+  g.fillStyle = 'rgba(255,255,255,0.35)'; g.beginPath(); g.ellipse(48, 44, 22, 13, -0.5, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#fffaf0'; g.strokeStyle = '#141414'; g.lineWidth = 6; g.font = 'bold 84px serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.strokeText('♪', 62, 70); g.fillText('♪', 62, 70);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  coinTexCache.set(color, t);
+  return t;
+}
 
 function cleanName(n) {
   n = String(n || '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 14);
@@ -62,6 +86,11 @@ export class Game {
     this.camTarget = { look: new THREE.Vector3(0, 12, 0), pos: new THREE.Vector3(0, 22, 36) };
     this.cat = new CatWheel(this.scene, R, DEPTH);
     this.fx = new FX(fx);
+    this.track = new Track(this.scene, R);
+    this.mode = 'classic';      // classic | tambor | serpiente | pista
+    this.pistaK = 0;            // 0 = rueda, 1 = pista estirada
+    this.waveA = 0;             // amplitud de las ondas (serpiente)
+    this.stemSong = null;       // chart.json de una canción con STEMS
     this.obsLayer = new THREE.Group(); this.scene.add(this.obsLayer);
     this.playersLayer = new THREE.Group(); this.scene.add(this.playersLayer);
 
@@ -110,6 +139,10 @@ export class Game {
     const dist = Math.max(R * 3.2, halfW / (Math.tan(THREE.MathUtils.degToRad(17)) * aspect));
     if (this.state === 'lobby' || this.state === 'loading') {
       this.camTarget.pos.set(0, R * 1.9, dist * 1.08); this.camTarget.look.set(0, R * 1.42, 0);
+    } else if (this.mode === 'pista') {
+      // detrás de los jugadores, mirando la pista hacia la boca del gato
+      const back = Math.max(15, 10.5 / Math.min(1, aspect / 1.4));
+      this.camTarget.pos.set(0, R + 7.2, back); this.camTarget.look.set(0, R - 0.6, -22);
     } else {
       this.camTarget.pos.set(0, R * 2.15, dist); this.camTarget.look.set(0, R * 1.08, 0);
     }
@@ -210,17 +243,78 @@ export class Game {
     const ch = changeAt(this.chart, t + 0.01);
     const list = [...this.players.values()].filter((p) => !p.waiting && p.alive);
     const n = list.length;
+    const mode = ch.mode || 'classic';
+    list.sort((a, b) => a.s - b.s);
+    if (mode === 'pista') {
+      // un carril por jugador (de a 4 por fila); las filas siguientes un poco atrás
+      list.forEach((p, k) => {
+        p.laneIdx = [1, 2, 0, 3][k % 4]; p.laneName = 'L' + p.laneIdx;
+        p.targetS = Math.floor(k / 4) * 1.9;
+        if (instant || p.laneXv === undefined) p.laneXv = laneX(p.laneIdx);
+        if (instant) p.s = p.targetS;
+      });
+      this.notifyMode(ch);
+      return;
+    }
     const { spacing, sub } = playerSpacing(ch.v, this.chart.beatDur, n);
     this.spacingInfo = { spacing, sub };
-    list.sort((a, b) => a.s - b.s);
+    if (mode === 'tambor') {
+      // a cada jugador le toca un instrumento (rota en cada sección)
+      const act = ch.lanesActive && ch.lanesActive.length ? ch.lanesActive : STEM_LANES;
+      const groups = {};
+      list.forEach((p, k) => {
+        const L = act[(k + (ch.seg || 0)) % act.length];
+        p.laneName = L; p.lane = stemZ(L);
+        (groups[L] = groups[L] || []).push(p);
+      });
+      Object.values(groups).forEach((g) => {
+        const lo = -Math.floor((g.length - 1) / 2);
+        g.forEach((p, j) => { p.targetS = (lo + j) * spacing; if (instant) p.s = p.targetS; });
+      });
+      this.notifyMode(ch);
+      return;
+    }
     const lo = -Math.floor((n - 1) / 2);
     list.forEach((p, k) => {
       p.targetS = (lo + k) * spacing;
       // carriles alternados: adelante / atrás (los obstáculos de "medio carril" solo golpean uno)
-      p.laneName = k % 2 ? 'back' : 'front';
+      p.laneName = mode === 'serpiente' ? 'all' : (k % 2 ? 'back' : 'front');
       p.lane = (k % 2 ? -1 : 1) * DEPTH * 0.25;
       if (instant) p.s = p.targetS;
     });
+    if (mode !== 'classic') this.notifyMode(ch);
+  }
+
+  /** Avisa a cada celular el modo actual (y su instrumento en el tambor). */
+  notifyMode(ch) {
+    const mode = ch.mode || 'classic';
+    this.players.forEach((p) => {
+      if (p.waiting || !p.remote || !p.alive) return;
+      this.ui.sendTo(p, this.modeMsg(p, mode));
+    });
+  }
+  /** Mensaje de modo para un celular (también se manda al reconectar). */
+  modeMsg(p, mode) {
+    mode = mode || this.mode;
+    const msg = { t: 'mode', mode };
+    if (mode === 'tambor' && STEM_INFO[p.laneName]) { msg.lane = p.laneName; msg.label = STEM_INFO[p.laneName].icon + ' ' + STEM_INFO[p.laneName].label; msg.color = STEM_INFO[p.laneName].color; }
+    if (mode === 'pista') { msg.lane = p.laneIdx; msg.color = LANE_COLORS[p.laneIdx]; }
+    return msg;
+  }
+
+  /** Cambiar de carril en la pista (◀ ▶). */
+  laneMove(p, d) {
+    if (!p || p.waiting || !p.alive || this.state !== 'playing' || this.mode !== 'pista' || this.pistaK < 0.6) return;
+    const ni = Math.max(0, Math.min(3, (p.laneIdx || 0) + (d > 0 ? 1 : -1)));
+    if (ni === p.laneIdx) return;
+    p.laneIdx = ni; p.laneName = 'L' + ni;
+    if (p.grind) { // saltar de la baranda hacia el otro carril
+      p.grind = null;
+      p.jump = { segs: [{ t: this.simT, h: PHYS.RAIL_H, v: PHYS.POP_V * 0.75 }], dj: true, pop: true };
+    }
+    if (p.isBot) p.botPlan = null;
+    this.audio.laneMove();
+    this.ui.sendTo(p, { t: 'lane', lane: ni, color: LANE_COLORS[ni] });
   }
 
   addBot() {
@@ -249,6 +343,10 @@ export class Game {
       const k1 = this.players.get('kb-1'), k2 = this.players.get('kb-2');
       if (e.code === 'Space' || e.code === 'KeyW') { e.preventDefault(); if (k1) this.jump(k1, this.nowSong()); }
       if (e.code === 'ArrowUp' || e.code === 'Enter' && this.state === 'playing') { if (k2) { e.preventDefault(); this.jump(k2, this.nowSong()); } }
+      if (e.code === 'KeyA' && k1) this.laneMove(k1, -1);
+      if (e.code === 'KeyD' && k1) this.laneMove(k1, 1);
+      if (e.code === 'ArrowLeft' && k2) { e.preventDefault(); this.laneMove(k2, -1); }
+      if (e.code === 'ArrowRight' && k2) { e.preventDefault(); this.laneMove(k2, 1); }
       if (e.code === 'KeyM' && k1) this.meow(k1);
       if (e.code === 'KeyN' && k2) this.meow(k2);
       if (e.code === 'KeyH') { this.showHitboxes = !this.showHitboxes; this.ui.toast(this.showHitboxes ? 'Hitboxes visibles (H)' : 'Hitboxes ocultas'); }
@@ -343,12 +441,24 @@ export class Game {
       p.lagGrace = Math.max(0.05, Math.min(0.2, ((client && (client.minRtt || client.rtt)) || 60) / 2000 + 0.06));
       this.jump(p, this.nowSong() - delay);
     } else if (msg.t === 'up') this.release(p);
+    else if (msg.t === 'lane') this.laneMove(p, msg.d);
     else if (msg.t === 'meow') this.meow(p);
     else if (msg.t === 'name' && this.state === 'lobby') { p.name = cleanName(msg.name); this.saveRoster(); this.ui.refreshLobby(); }
   }
 
   // --------------------------------------------------------------- partida
+  /** Canción preparada con STEMS (chart.json del cuaderno de Colab). */
+  setStemSong(buffer, sc, name) {
+    this.audio.song = buffer;
+    this.audio.songName = name;
+    this.stemSong = sc;
+    this.analysis = { stem: true, bpm: sc.bpm, duration: sc.duration };
+    this.chart = null;
+    return this.analysis;
+  }
+
   async setSong(buffer, name, onProgress) {
+    this.stemSong = null;
     this.audio.song = buffer;
     this.audio.songName = name;
     this.analysis = await this.audio.analyze(buffer, onProgress);
@@ -365,14 +475,15 @@ export class Game {
       p.jump = null; p.landT = -99; p.buffered = false; p.pending = null; p.ko = null; p.elimT = null; p.lastJumpReq = 0;
       p.lastT0 = -99; p.handled = null; p.botPlan = null; p.judged = new Map();
       p.grind = null; p.holding = !!p.isBot; p.releaseT = -99; p.prevFeet = 0; p.grindTime = 0; p.lastSlang = 0;
+      p.lives = this.stemSong ? 3 : 1; p.invuln = -99; p.coins = 0; p.laneIdx = 1; p.laneXv = undefined; p.nextLaneThink = 0;
       p.actor.group.visible = true; p.actor.bodyPivot.rotation.set(0, 0, 0); p.actor.facing.rotation.x = 0; p.actor.group.scale.setScalar(1);
     });
     this.layoutLanes();
     this.chart = null;
-    const chartReady = makeChartAsync(this.analysis, { difficulty: this.difficulty, seed: (Math.random() * 1e9) | 0 });
+    const chartReady = makeChartAsync(this.analysis, { difficulty: this.difficulty, seed: (Math.random() * 1e9) | 0 }, this.stemSong);
     this.clearObstacles();
     this.nextEv = 0; this.simT = -0.5; this.warned = new Set();
-    this.emo = { recent: [], kos: [], joyUntil: 0, surpriseUntil: 0, angryUntil: 0, current: 'idle' };
+    this.emo = { recent: [], kos: [], joyUntil: 0, surpriseUntil: 0, angryUntil: 0, winkUntil: 0, dizzyUntil: 0, current: 'idle' };
     this.startCount = this.players.size;
     this.state = 'countdown';
     this.ui.onState('preparing');
@@ -382,12 +493,14 @@ export class Game {
       this.chart = await chartReady;
       this.ui.preparing(false);
       if (this.state !== 'countdown') return; // canceló mientras tanto
+      this.mode = this.chart.stem ? (changeAt(this.chart, 0).mode || 'tambor') : 'classic';
+      this.pistaK = this.mode === 'pista' ? 1 : 0;
       this.layoutPlay(0, true);
       this.prewarm();
       this.updateCamTargets();
       this.camPos.copy(this.camTarget.pos); this.camLook.copy(this.camTarget.look);
       const d0 = dirAt(this.chart, 0);
-      this.players.forEach((p) => p.actor.faceTowards(-d0, 0, true));
+      this.players.forEach((p) => { if (this.mode === 'pista') p.actor.faceAngle(Math.PI / 2, 0, true); else p.actor.faceTowards(-d0, 0, true); });
       this.ui.onState('countdown');
       this.fx.startIris('open', 0.6, 0.5, 0.5);
       this.ui.countdown(() => {
@@ -414,9 +527,11 @@ export class Game {
       const g = new THREE.Group();
       const seen = new Set();
       for (const ev of this.chart.events) {
-        if (seen.has(ev.kind)) continue;
-        seen.add(ev.kind);
-        if (ev.kind === 'rail') buildRailParts(ev, DEPTH - 0.15, PHYS).forEach((pt) => g.add(pt.mesh));
+        const key = ev.kind + (ev.kind === 'rail' && ev.mode === 'pista' ? 'P' : '');
+        if (seen.has(key) || ev.kind === 'coin') continue;
+        seen.add(key);
+        if (ev.kind === 'rail' && ev.mode === 'pista') g.add(buildRailStraight(ev, TRACK.LANE_W - 0.3, PHYS));
+        else if (ev.kind === 'rail') buildRailParts(ev, DEPTH - 0.15, PHYS).forEach((pt) => g.add(pt.mesh));
         else g.add(buildObstacleMesh(ev, DEPTH - 0.15));
       }
       g.position.set(0, R + 1, 0);
@@ -464,10 +579,33 @@ export class Game {
     const ch = this.chart;
     while (this.nextEv < ch.events.length && ch.events[this.nextEv].tSpawn - 0.2 <= t) {
       const ev = ch.events[this.nextEv++];
+      const pista = ev.mode === 'pista';
+      if (ev.kind === 'coin') {
+        const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: coinTexture(ev.coinColor || '#ffe800'), depthWrite: false }));
+        sp.scale.set(0.95, 0.95, 1);
+        const holder = new THREE.Group(); holder.add(sp);
+        holder.userData.x = laneX(+ev.lane.slice(1));
+        this.obsLayer.add(holder);
+        this.active.push({ ev, mesh: holder, inner: sp, coin: true, passed: false, passedBy: new Set(), reach: 0.45, born: t });
+        continue;
+      }
+      if (ev.kind === 'rail' && pista) {
+        const holder = new THREE.Group();
+        holder.add(buildRailStraight(ev, TRACK.LANE_W - 0.3, PHYS));
+        holder.userData.x = laneX(+ev.lane.slice(1));
+        this.obsLayer.add(holder);
+        this.active.push({ ev, mesh: holder, passed: false, passedBy: new Set(), reach: reachOf(ev.prims), born: t, rail: true, straight: true });
+        this.cat.meow(0.5);
+        this.audio.spring();
+        this.ui.railHint();
+        continue;
+      }
       if (ev.kind === 'rail') {
         const holder = new THREE.Group();
-        const parts = buildRailParts(ev, DEPTH - 0.15, PHYS);
-        parts.forEach((pt) => { holder.add(pt.mesh); pt.mesh.visible = false; pt.born = null; });
+        const tLane = STEM_LANES.includes(ev.lane);
+        const parts = buildRailParts(ev, tLane ? DEPTH / 4 - 0.12 : DEPTH - 0.15, PHYS);
+        parts.forEach((pt) => { holder.add(pt.mesh); pt.mesh.visible = false; pt.born = null; if (tLane) pt.mesh.position.z = stemZ(ev.lane); });
+        holder.userData.z = tLane ? stemZ(ev.lane) : 0;
         this.obsLayer.add(holder);
         this.active.push({ ev, mesh: holder, parts, passed: false, passedBy: new Set(), reach: reachOf(ev.prims), born: t, hb: this.showHitboxes, rail: true });
         this.cat.tossPaw(-ev.dir);
@@ -475,18 +613,20 @@ export class Game {
         this.ui.railHint();
         continue;
       }
-      // medio carril: la mitad de la profundidad, adelante (+z) o atrás (-z)
-      const half = ev.lane !== 'all';
-      const depthUse = half ? DEPTH / 2 - 0.12 : DEPTH - 0.15;
+      // carriles: medio carril (clásico), un instrumento (tambor) o un carril de la pista
+      const tLane = STEM_LANES.includes(ev.lane);
+      const half = ev.lane === 'front' || ev.lane === 'back';
+      const depthUse = pista ? TRACK.LANE_W - 0.3 : tLane ? DEPTH / 4 - 0.12 : half ? DEPTH / 2 - 0.12 : DEPTH - 0.15;
       const mesh = buildObstacleMesh(ev, depthUse);
-      const zOff = half ? (ev.lane === 'front' ? 1 : -1) * DEPTH / 4 : 0;
+      const zOff = pista ? 0 : tLane ? stemZ(ev.lane) : half ? (ev.lane === 'front' ? 1 : -1) * DEPTH / 4 : 0;
       mesh.position.z = zOff;
       const holder = new THREE.Group(); holder.add(mesh);
-      holder.userData.zOff = zOff; holder.userData.depth = half ? DEPTH / 2 : DEPTH;
+      holder.userData.zOff = zOff; holder.userData.depth = depthUse + 0.12;
+      if (pista) { holder.rotation.y = -Math.PI / 2; holder.userData.x = laneX(+ev.lane.slice(1)); }
       if (this.showHitboxes) holder.add(this.hitboxFor(ev, holder));
       this.obsLayer.add(holder);
       this.active.push({ ev, mesh: holder, inner: mesh, passed: false, passedBy: new Set(), reach: reachOf(ev.prims), born: t, hb: this.showHitboxes });
-      this.cat.tossPaw(-ev.dir);
+      if (pista) this.cat.meow(0.35); else this.cat.tossPaw(-ev.dir);
       this.audio.spring();
     }
   }
@@ -519,7 +659,7 @@ export class Game {
         p.actor.kick(-2.2);
         if (p.buffered) { p.buffered = false; p.jump = { segs: makeTraj(p.landT, null), dj: false }; p.lastT0 = p.landT; p.actor.kick(-3); this.audio.jump(); }
       }
-      if (p.isBot) this.botThink(p, t);
+      if (p.isBot) { if (this.mode === 'pista') this.botPista(p, t); this.botThink(p, t); }
       // ---- patinando sobre una baranda
       if (p.grind) {
         const g = p.grind;
@@ -543,7 +683,7 @@ export class Game {
       // ---- aterrizar sobre una baranda (bajando, cruzando su altura, encima de ella)
       if (!p.grind && p.jump && feet < PHYS.RAIL_H && p.prevFeet >= PHYS.RAIL_H) {
         for (const o of this.active) {
-          if (o.ev.kind !== 'rail') continue;
+          if (o.ev.kind !== 'rail' || !laneHits(o.ev.lane, p.laneName)) continue;
           if (overRail(this.obstacleS(o.ev, t) - p.s, o.ev.railL, o.ev.dir)) {
             p.grind = { ev: o.ev, o, t }; p.jump = null; p.grindTime = 0; feet = PHYS.RAIL_H;
             p.actor.kick(-2.5);
@@ -554,10 +694,11 @@ export class Game {
       }
       p.prevFeet = feet;
       let hitObs = null;
+      const safe = p.invuln > t; // recién golpeado: invulnerable un momento
       for (const o of this.active) {
-        if (!laneHits(o.ev.lane, p.laneName)) continue;
+        if (safe || o.coin || !laneHits(o.ev.lane, p.laneName)) continue;
         const rel = this.obstacleS(o.ev, t) - p.s;
-        if (Math.abs(rel) > 3.2) continue;
+        if (Math.abs(rel) > (o.rail ? o.ev.railL + 1 : 3.2)) continue;
         if (hitTest(rel, feet, o.ev.prims)) { hitObs = o; break; }
       }
       if (hitObs) {
@@ -569,6 +710,7 @@ export class Game {
       for (const o of this.active) {
         if (o.passedBy.has(p.key)) continue;
         const rel = this.obstacleS(o.ev, t) - p.s;
+        if (o.coin) { if (Math.abs(rel) < 0.45 && laneHits(o.ev.lane, p.laneName)) { o.passedBy.add(p.key); this.collectCoin(p, o); } else if (rel > 0.5) o.passedBy.add(p.key); continue; }
         if (rel * o.ev.dir > o.reach) { o.passedBy.add(p.key); if (!p.pending && laneHits(o.ev.lane, p.laneName)) this.scoreObstacle(o.ev, p); }
       }
     });
@@ -581,11 +723,60 @@ export class Game {
       const feet = this.feetAt(p, t);
       for (const o of this.active) {
         if (!laneHits(o.ev.lane, p.laneName)) continue;
+        if (o.coin) continue;
         const rel = this.obstacleS(o.ev, t) - p.s;
-        if (Math.abs(rel) < 3.2 && hitTest(rel, feet, o.ev.prims)) return; // sigue chocando: se mantiene el choque
+        if (Math.abs(rel) < (o.rail ? o.ev.railL + 1 : 3.2) && hitTest(rel, feet, o.ev.prims)) return; // sigue chocando: se mantiene el choque
       }
     }
     p.pending = null;
+  }
+
+  /**
+   * Bots en la pista: van al carril de la próxima baranda; si viene un
+   * obstáculo en su carril y hay uno libre al lado, se cambian.
+   */
+  botPista(p, t) {
+    if (t < (p.nextLaneThink || 0) || p.grind || p.jump) return;
+    p.nextLaneThink = t + 0.12;
+    const ch = this.chart;
+    const danger = (li, a, b) => ch.clusters.some((c) => c.mode === 'pista' && !c.rail && c.plans['L' + li] && c.anchor > a && c.anchor < b);
+    const spikes = (li, a, b) => ch.clusters.some((c) => c.rail && c.mode === 'pista' && c.plans['L' + li] && c.anchor < b && c.lastArr > a);
+    let target = p.laneIdx;
+    const rail = ch.clusters.find((c) => c.rail && c.mode === 'pista' && c.anchor > t + 0.75 && c.anchor < t + 2.2);
+    if (rail && p.skill > 0.5) {
+      const li = PISTA_IDX(rail);
+      if (li >= 0 && !danger(li, t, rail.anchor) ) target = li;
+    }
+    if (target === p.laneIdx && (danger(p.laneIdx, t + 0.2, t + 1.1) || spikes(p.laneIdx, t + 0.1, t + 1.0)) && Math.random() < 0.6) {
+      const opts = [p.laneIdx - 1, p.laneIdx + 1].filter((x) => x >= 0 && x < 4 && !danger(x, t, t + 1.3) && !spikes(x, t, t + 1.3));
+      if (opts.length) target = opts[Math.floor(Math.random() * opts.length)];
+    }
+    if (target !== p.laneIdx) this.laneMove(p, target > p.laneIdx ? 1 : -1);
+  }
+
+  /** Nota ♪ recogida en la pista. */
+  collectCoin(p, o) {
+    if (o.taken) return;
+    o.taken = true; o.kill = true;
+    p.coins = (p.coins || 0) + 1;
+    p.score += 25 + Math.min(p.combo, 20) * 2;
+    const pos = o.mesh.position.clone(); pos.y += 0.6;
+    if (!p.isBot || this.players.size <= 2) this.fx.popup('♪ +' + (25 + Math.min(p.combo, 20) * 2), pos, o.ev.coinColor || PAL.yellow, 0.6);
+    this.audio.coin();
+  }
+
+  /** Con vidas (canciones con STEMS): un golpe quita una vida y da invulnerabilidad. */
+  loseLife(p, o, t) {
+    p.lives--; p.pending = null; p.combo = 0; p.invuln = t + 1.6;
+    if (p.grind) { p.grind = null; }
+    p.jump = { segs: [{ t, h: this.feetAt(p, t), v: 5.5 }], dj: true, hurt: true };
+    p.actor.kick(3);
+    this.audio.hit();
+    const pos = p.actor.group.position.clone(); pos.y += 1.2;
+    this.fx.poof(pos, 0.9);
+    this.fx.popup(p.lives === 1 ? '¡ÚLTIMA VIDA!' : '-1 ♥', pos, PAL.red, 1.0);
+    if (this.emo) { this.emo.surpriseUntil = t + 1.1; this.emo.recent.push('ko'); }
+    this.ui.sendTo(p, { t: 'hit', lives: p.lives });
   }
 
   /** Bots: siguen el plan del grupo (salto + doble salto) con un error humano. */
@@ -674,6 +865,7 @@ export class Game {
     this.fx.popup('GRIND +' + gain, head, PAL.yellow, 0.9);
     this.audio.grindEnd();
     this.emoJudge(j); this.emoJudge('grind');
+    if (j === 'perfect' && this.emo) this.emo.winkUntil = this.nowSong() + 0.9; // guiño al salir perfecto de la baranda
     const sl = this.slang(p, GRIND_SLANG, true);
     this.ui.sendTo(p, { t: 'judge', j, combo: p.combo, score: p.score, sl });
   }
@@ -695,6 +887,7 @@ export class Game {
     this.emo.recent.push(j);
     if (this.emo.recent.length > 10) this.emo.recent.shift();
     if (j === 'perfect') {
+      if (Math.random() < 0.12) this.emo.winkUntil = this.nowSong() + 0.7;
       const last = this.emo.recent.slice(-5);
       if (last.filter((x) => x === 'perfect').length >= 3) this.emo.joyUntil = this.nowSong() + 1.4;
     }
@@ -707,7 +900,12 @@ export class Game {
    */
   updateEmotion(t) {
     const E = this.emo;
-    if (!E || this.state !== 'playing') return this.state === 'results' ? 'joy' : 'idle';
+    if (!E || this.state !== 'playing') {
+      if (this.state !== 'results') return 'idle';
+      // resultados: feliz si alguien sobrevivió; triste si cayeron todos
+      const inGame = [...this.players.values()].filter((p) => !p.waiting);
+      return inGame.some((p) => p.alive) ? 'joy' : 'sad';
+    }
     E.kos = E.kos.filter((k) => t - k < 6);
     const alive = [...this.players.values()].filter((p) => p.alive && !p.waiting);
     const bestCombo = alive.reduce((m, p) => Math.max(m, p.combo), 0);
@@ -715,8 +913,10 @@ export class Game {
     const good = r.filter((x) => x === 'perfect' || x === 'great').length;
     const sloppy = r.slice(-6).filter((x) => x === 'ok').length;
     let e = 'idle';
-    if (t < E.angryUntil) e = 'angry';
+    if (t < E.dizzyUntil) e = 'dizzy';
+    else if (t < E.angryUntil) e = 'angry';
     else if (t < E.surpriseUntil) e = 'surprised';
+    else if (t < E.winkUntil) e = 'wink';
     else if (t < E.joyUntil) e = 'joy';
     else if (bestCombo >= 8 && r.length >= 6 && good / r.length >= 0.75) e = 'vibe';
     else if (sloppy >= 4) e = 'irritated';
@@ -726,6 +926,8 @@ export class Game {
 
   eliminate(p, o, t) {
     if (!p.alive) return;
+    if (this.chart && this.chart.stem && (p.lives || 1) > 1) { this.loseLife(p, o, t); return; }
+    p.lives = 0;
     p.alive = false; p.pending = null; p.combo = 0;
     p.elimT = t;
     const alive = [...this.players.values()].filter((q) => q.alive && !q.waiting).length;
@@ -739,7 +941,9 @@ export class Game {
     this.fx.popup('¡K.O.!', pos, PAL.red, 1.3);
     if (this.emo) {
       this.emo.kos.push(t);
-      if (this.emo.kos.filter((k) => t - k < 5).length >= 2) this.emo.angryUntil = t + 3;
+      const recentKos = this.emo.kos.filter((k) => t - k < 5).length;
+      if (recentKos >= 3) this.emo.dizzyUntil = t + 2.5;       // aturdido: muchos K.O. seguidos
+      else if (recentKos >= 2) this.emo.angryUntil = t + 3;
       else this.emo.surpriseUntil = t + 1.3;
       this.emo.recent.push('ko');
     }
@@ -755,7 +959,8 @@ export class Game {
     const inGame = [...this.players.values()].filter((p) => !p.waiting);
     const alive = inGame.filter((p) => p.alive);
     const songOver = t >= this.chart.duration - 0.25;
-    if (songOver || alive.length === 0 || (this.startCount > 1 && alive.length <= 1)) {
+    // con STEMS gana el mejor puntaje: no se termina por quedar uno solo
+    if (songOver || alive.length === 0 || (!this.chart.stem && this.startCount > 1 && alive.length <= 1)) {
       this.endTimer = setTimeout(() => { this.endTimer = null; this.finish(); }, songOver ? 300 : 1800);
     }
   }
@@ -767,7 +972,8 @@ export class Game {
     this.audio.fanfare();
     const inGame = [...this.players.values()].filter((p) => !p.waiting);
     // orden: vivos por puntaje, luego eliminados por momento de eliminación (más tarde = mejor) y puntaje
-    inGame.sort((a, b) => {
+    if (this.chart.stem) inGame.sort((a, b) => b.score - a.score);
+    else inGame.sort((a, b) => {
       if (a.alive !== b.alive) return a.alive ? -1 : 1;
       if (!a.alive && a.elimT !== b.elimT) return (b.elimT || 0) - (a.elimT || 0);
       return b.score - a.score;
@@ -813,18 +1019,48 @@ export class Game {
 
     // gato
     if (this.state === 'playing') this.lastSongT = t;
-    const dir = this.chart && this.state !== 'lobby' ? dirAt(this.chart, this.state === 'playing' ? t : (this.state === 'results' ? (this.lastSongT || 0) : 0)) : 1;
-    let look, spin;
+    const tSong = this.state === 'playing' ? t : (this.state === 'results' ? (this.lastSongT || 0) : 0);
+    const inMatch = this.chart && (this.state === 'playing' || this.state === 'countdown' || this.state === 'results');
+    // ---- modo del gato (canciones con STEMS) y transición rueda ↔ pista
+    const modeNow = inMatch && this.chart.stem ? (changeAt(this.chart, tSong).mode || 'tambor') : 'classic';
+    if (modeNow !== this.mode) { this.mode = modeNow; this.updateCamTargets(); }
+    // la transición sigue el reloj de la canción (dura lo mismo en un PC lento)
+    const chM = inMatch && this.chart.stem ? changeAt(this.chart, tSong) : null;
+    if (chM && this.state === 'playing') {
+      const idx = this.chart.changes.indexOf(chM);
+      const prev = idx > 0 ? this.chart.changes[idx - 1].mode : chM.mode;
+      const since = (tSong - chM.t) / 1.1;
+      this.pistaK = chM.mode === 'pista' ? Math.min(1, Math.max(0, since)) : prev === 'pista' ? Math.max(0, Math.min(1, 1 - since)) : 0;
+    } else {
+      const pk = this.mode === 'pista' ? 1 : 0;
+      this.pistaK += Math.max(-dt / 1.1, Math.min(dt / 1.1, pk - this.pistaK));
+    }
+    const e = easeIO(this.pistaK);
+    const S = 1 + (PISTA_CAT.SCALE - 1) * e;
+    this.cat.root.position.set(0, (R - 1.19 * PISTA_CAT.SCALE) * e, PISTA_CAT.Z * e);
+    this.cat.root.scale.setScalar(S);
+    this.cat.setSideStyle(this.mode === 'tambor' ? 'tambor' : 'classic');
+    const dir = this.chart && this.state !== 'lobby' ? dirAt(this.chart, tSong) : 1;
+    let look, spin, lookY = 0;
     if (this.state === 'playing' || this.state === 'results') {
-      const incoming = this.active.filter((o) => !o.passed).sort((a, b) => a.ev.tArr - b.ev.tArr)[0];
+      const incoming = this.active.filter((o) => !o.passed && !o.coin).sort((a, b) => a.ev.tArr - b.ev.tArr)[0];
       look = incoming ? Math.max(-1, Math.min(1, this.obstacleS(incoming.ev, t) / (R * 0.9))) : -dir * 0.6;
       const vNow = incoming ? incoming.ev.v : (this.chart ? changeAt(this.chart, t).v : 6);
       spin = this.state === 'playing' ? dir * vNow / R : 0.05;
+      if (this.mode === 'pista') { look = Math.sin(t * 0.8) * 0.25; lookY = 0.6; spin = 0; }
     } else { look = undefined; spin = 0.12; }
     this.spinSpeed += (spin - this.spinSpeed) * Math.min(1, dt * 4);
     this.dir = dir;
     const emotion = this.updateEmotion(t);
-    this.cat.update(dt, { beat: beat.phase, beatIndex: beat.index, look, spinSpeed: this.spinSpeed, lookY: 0, emotion });
+    this.cat.update(dt, { beat: beat.phase, beatIndex: beat.index, look, spinSpeed: this.spinSpeed, lookY, emotion });
+    // ---- ondas de la serpiente (más fuertes con el bajo)
+    const ch = inMatch && this.chart.stem ? changeAt(this.chart, tSong) : null;
+    const waveT = this.mode === 'serpiente' && this.state !== 'lobby' ? 0.22 + 0.3 * this.energyAt('bass', tSong) + 0.12 * this.energyAt('drums', tSong) : 0;
+    this.waveA += (waveT - this.waveA) * Math.min(1, dt * 3);
+    this.cat.setWave(this.waveA, (ch && ch.waveN) || this.cat.wave.n || 12);
+    // ---- pista: se estira desde la boca del gato
+    const en = ['drums', 'bass', 'vocals', 'other'].map((k) => this.energyAt(k, tSong));
+    this.track.update(this.pistaK, beat.index + beat.phase, this.chart ? this.chart.beatDur : 0.5, ch ? ch.v : 24, en);
     // color de fondo según la sección de la canción
     this.bgTarget = BG_PALETTES[0][0];
     if (this.chart && (this.state === 'playing' || this.state === 'results')) {
@@ -838,23 +1074,32 @@ export class Game {
     this.render(dt);
   }
 
-  /** Avisos y efectos de los cambios de sentido y de velocidad. */
+  /** Energía (0..1) de un STEM en el tiempo t (canciones con STEMS). */
+  energyAt(name, t) {
+    const E = this.chart && this.chart.energy;
+    if (!E || !E[name]) return 0;
+    const i = Math.max(0, Math.min(E[name].length - 1, Math.floor(t * (E.fps || 10))));
+    return E[name][i] || 0;
+  }
+
+  /** Avisos y efectos de los cambios de sentido, velocidad y modo del gato. */
   handleChanges(t) {
     const ch = this.chart;
     for (let i = 1; i < ch.changes.length; i++) {
       const r = ch.changes[i];
-      if (r.t > t + 3) break;
-      const warnT = r.t - 2 * ch.beatDur;
+      if (r.t > t + 4) break;
+      const warnT = r.t - (r.modeChange ? Math.max(3, 4 * ch.beatDur) : 2 * ch.beatDur);
       if (t >= warnT && !this.warned.has(i)) {
         this.warned.add(i);
-        this.ui.change(r);
+        if (r.modeChange) this.ui.modeSign(r); else this.ui.change(r);
         this.cat.meow(1); this.audio.meow(r.speed ? 1.25 : 0.8);
         if (this.emo) this.emo.surpriseUntil = t + 1.2;
+        if (r.modeChange) this.players.forEach((p) => this.ui.sendTo(p, { t: 'hint', text: MODE_INFO[r.mode].icon + ' ' + MODE_INFO[r.mode].sign }));
       }
       if (t >= r.t && !this.warned.has('done' + i)) {
         this.warned.add('done' + i);
         if (r.rev) this.audio.screech();
-        if (r.speed) { this.audio.speedUp(); this.fx.flash(); }
+        if (r.speed || r.modeChange) { this.audio.speedUp(); this.fx.flash(); }
         // lo que quedaba en la rueda se va en una nube y los jugadores se reacomodan
         this.active.forEach((o) => { o.kill = true; });
         this.layoutPlay(t);
@@ -870,12 +1115,39 @@ export class Game {
       const s = this.state === 'playing' ? this.obstacleS(ev, t) : this.obstacleS(ev, o.lastT || t);
       if (this.state === 'playing') o.lastT = t;
       o.passed = s * ev.dir > 0;
+      if (ev.mode === 'pista') {
+        // pista recta: z = s (negativo = hacia la boca del gato)
+        const x = o.mesh.userData.x || 0;
+        const age = t - (ev.tSpawn - 0.2);
+        const k = Math.min(1, Math.max(0, age / 0.3));
+        const pop = k < 1 ? (1 - Math.pow(1 - k, 3)) * (1 + Math.sin(k * Math.PI) * 0.3) : 1;
+        if (o.coin) {
+          o.mesh.position.set(x, R + 0.75 + Math.sin(t * 6 + ev.tArr) * 0.12, s);
+          o.inner.scale.set(0.95 * pop, 0.95 * pop, 1);
+        } else {
+          o.mesh.position.set(x, R, s);
+          if (o.rail) o.mesh.scale.set(1, Math.max(0.01, pop), 1);
+          else {
+            o.inner.scale.set(1, Math.max(0.01, pop), 1);
+            if (o.inner.userData.spin && (ev.kind === 'log' || ev.kind === 'yarn' || ev.kind === 'bomb')) o.inner.userData.spin.rotation.z = -(s / (ev.w / 2)) * 0.5;
+          }
+        }
+        const tail = o.rail ? s - ev.railL : s;
+        if ((tail > TRACK.NEAR - 0.5 || o.kill) && this.state === 'playing') {
+          this.obsLayer.remove(o.mesh);
+          if (o.coin && o.taken) this.fx.poof(o.mesh.position.clone(), 0.5);
+          continue;
+        }
+        keep.push(o);
+        continue;
+      }
       if (o.rail) {
         // cada tramo sigue la curva; aparece al entrar al arco visible
         for (const pt of o.parts) {
           const sp = s + pt.dx;
           const ph = sp / R;
-          pt.mesh.position.set(R * Math.sin(ph), R * Math.cos(ph), 0);
+          const rr = R + this.cat.waveAt(ph);
+          pt.mesh.position.set(rr * Math.sin(ph), rr * Math.cos(ph), pt.mesh.position.z);
           pt.mesh.rotation.z = -ph;
           const inside = Math.abs(sp) <= PHYS.SPAWN_ARC * R + 0.2 && sp * ev.dir <= PHYS.EXIT_ARC * R;
           if (inside && pt.born === null) pt.born = t;
@@ -891,7 +1163,8 @@ export class Game {
         continue;
       }
       const phi = s / R;
-      o.mesh.position.set(R * Math.sin(phi), R * Math.cos(phi), 0);
+      const rr = R + this.cat.waveAt(phi);
+      o.mesh.position.set(rr * Math.sin(phi), rr * Math.cos(phi), 0);
       o.mesh.rotation.z = -phi;
       // aparición con rebote
       const age = t - (ev.tSpawn - 0.2);
@@ -934,6 +1207,7 @@ export class Game {
         return;
       }
       let s, z = p.lane, air = 0, mode;
+      const pk = this.pistaK > 0 && playing ? easeIO(this.pistaK) : 0;
       if (playing) {
         if (p.targetS !== undefined && p.alive) {
           const d = p.targetS - p.s;
@@ -945,7 +1219,7 @@ export class Game {
         else if (this.state === 'countdown') mode = 'idle';
         else if (p.grind) mode = 'grind';
         else mode = air > 0 ? 'jump' : 'run';
-        a.faceTowards(-dir, dt);
+        if (this.mode === 'pista') a.faceAngle(Math.PI / 2, dt); else a.faceTowards(-dir, dt);
       } else {
         // lobby: pasean por la cabeza y bailan
         air = this.feetAt(p, t);
@@ -962,15 +1236,28 @@ export class Game {
         s = p.s;
       }
       const phi = s / R;
-      const rr = R + 0.02 + air;
-      a.group.position.set(Math.sin(phi) * rr, Math.cos(phi) * rr, z);
+      const rr = R + 0.02 + air + (pk < 1 ? this.cat.waveAt(phi) : 0);
       // voltereta en el doble salto (hacia donde corre)
       let flip = 0;
-      if (p.jump && (p.jump.dj || p.jump.pop)) {
+      if (p.jump && (p.jump.dj || p.jump.pop) && !p.jump.hurt) {
         const k = Math.min(1, Math.max(0, (t - p.jump.segs[p.jump.pop ? 0 : 1].t) / 0.55));
         flip = (1 - Math.pow(1 - k, 2)) * Math.PI * 2 * (playing ? dir : (a.heading > 1.5 ? 1 : -1));
       }
-      a.group.rotation.z = -phi + flip;
+      if (pk > 0) {
+        // pista: x = carril, z = s; se mezcla con la pose de la rueda durante la transición
+        if (p.laneXv === undefined) p.laneXv = laneX(p.laneIdx || 1);
+        p.laneXv += (laneX(p.laneIdx || 0) - p.laneXv) * Math.min(1, dt * 16);
+        const wx = Math.sin(phi) * rr, wy = Math.cos(phi) * rr;
+        a.group.position.set(wx + (p.laneXv - wx) * pk, wy + (R + 0.02 + air - wy) * pk, z + (s - z) * pk);
+        a.group.rotation.z = (-phi + flip) * (1 - pk);
+        a.group.rotation.x = -Math.abs(flip) * pk;
+      } else {
+        a.group.position.set(Math.sin(phi) * rr, Math.cos(phi) * rr, z);
+        a.group.rotation.z = -phi + flip;
+        a.group.rotation.x = 0;
+      }
+      // invulnerable tras un golpe: parpadea
+      a.group.visible = !(p.invuln > t && this.state === 'playing' && Math.floor(t * 12) % 2 === 0);
       a.ground.visible = flip === 0;
       a.ground.position.y = -air; // sombra se queda en el suelo
       a.ground.scale.setScalar(Math.max(0.35, 1 - air * 0.15));
@@ -991,17 +1278,20 @@ export class Game {
     const ctx = this.bg;
     ctx.setTransform(this.bgDpr, 0, 0, this.bgDpr, 0, 0);
     this.camera.updateMatrixWorld();
-    this.cat.drawBackdrop(ctx, this.W, this.H, (x, y, z) => this.project(x, y, z), { beat: this.beat ? this.beat.phase : 0, beatIndex: this.beat ? this.beat.index : 0, dir: this.dir, bg: this.bgTarget, dt });
+    this.cat.root.updateMatrixWorld();
+    const rm = this.cat.root.matrixWorld;
+    this.cat.drawBackdrop(ctx, this.W, this.H, (x, y, z) => { tmpW.set(x, y, z).applyMatrix4(rm); return this.project(tmpW.x, tmpW.y, tmpW.z); }, { beat: this.beat ? this.beat.phase : 0, beatIndex: this.beat ? this.beat.index : 0, dir: this.dir, bg: this.bgTarget, dt });
     this.renderer.render(this.scene, this.camera);
     // placas de nombre
     const plates = [];
     this.players.forEach((p) => {
-      if (p.waiting || !p.actor.group.visible || p.ko) return;
+      if (p.waiting || p.ko || (!p.actor.group.visible && !(p.invuln > this.t))) return;
       const gp = p.actor.group.position;
       const up = new THREE.Vector3(Math.sin(-p.actor.group.rotation.z), Math.cos(p.actor.group.rotation.z), 0);
+      if (this.pistaK > 0.5) up.set(0, 1, 0);
       const top = gp.clone().addScaledVector(up, CHAR_HEIGHT + 0.15);
       const head = this.project(top.x, top.y, top.z);
-      plates.push({ id: p.key, name: p.name, color: p.color, head, alive: p.alive, connected: p.connected || !p.remote });
+      plates.push({ id: p.key, name: p.name, color: p.color, head, alive: p.alive, connected: p.connected || !p.remote, lives: this.chart && this.chart.stem && this.state === 'playing' ? p.lives : undefined });
     });
     this.fx.draw(dt, (x, y, z) => this.project(x, y, z), plates);
   }

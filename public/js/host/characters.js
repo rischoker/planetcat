@@ -290,6 +290,13 @@ export class CharacterActor {
     this.facing.rotation.y = this.heading;
   }
 
+  /** Mirar en un ángulo exacto (y): +π/2 = hacia el fondo (−z), para la pista. */
+  faceAngle(target, dt, instant) {
+    let d = target - this.heading;
+    while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2;
+    this.heading = instant ? target : this.heading + d * Math.min(1, dt * 10);
+    this.facing.rotation.y = this.heading;
+  }
   kick(amount) { this.squashV += amount; }
 
   /**

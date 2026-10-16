@@ -44,7 +44,8 @@ export function landTime(segs) {
 }
 /** Altura de los pies en el tiempo t (0 en el suelo). */
 export function heightAt(segs, t) {
-  if (!segs || !segs.length || t <= segs[0].t) return 0;
+  if (!segs || !segs.length) return 0;
+  if (t <= segs[0].t) return segs[0].h; // al despegar desde una baranda los pies siguen arriba
   let s = segs[0];
   for (let i = 1; i < segs.length; i++) if (segs[i].t <= t) s = segs[i];
   const h = segHeight(s, t);

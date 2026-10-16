@@ -50,6 +50,7 @@
       <div class="net warn" id="net"><span class="dot"></span><span id="net-text">Conectando…</span></div>
       <div class="diag" id="net-diag">Conectando con el servidor…</div>
       <div class="hint">Escanea el QR o entra a la página y escribe el código.</div>
+      <div class="global" id="global"></div>
     </section>
 
     <section class="card right">
@@ -67,6 +68,7 @@
           <button class="small alt" id="btn-default-song" title="Volver a la canción original">↺</button>
         </div>
         <div class="info" id="song-info">Analizando ritmo…</div>
+        <div class="stems" id="stem-songs"></div>
       </div>
       <div class="diffs" id="diffs">
         <button data-d="facil">Fácil</button>
@@ -80,7 +82,7 @@
         <label>Efectos de película <input type="checkbox" id="film" checked></label>
       </details>
       <button id="btn-start" disabled>¡Que empiece la función!</button>
-      <div class="keys">Teclado 1: Espacio salta (2 veces = doble salto) · M maúlla — Teclado 2: ↑ salta · N maúlla<br>H muestra hitboxes · Esc pausa</div>
+      <div class="keys">Teclado 1: Espacio salta (2 veces = doble salto) · A/D carril · M maúlla — Teclado 2: ↑ salta · ←/→ carril · N maúlla<br>H muestra hitboxes · Esc pausa</div>
     </section>
   </div>
 
@@ -89,7 +91,7 @@
     <div class="top">
       <div class="pill">Vivos <b id="hud-alive">0/0</b></div>
       <div class="reel"><div id="hud-prog"></div></div>
-      <div class="pill">⚡ <b id="hud-speed">x1</b></div>
+      <div class="pill"><b id="hud-speed">x1</b></div>
       <div class="pill"><b id="hud-bpm">120</b> BPM · <span id="hud-diff">Normal</span></div>
     </div>
     <ol id="hud-scores"></ol>
@@ -103,7 +105,7 @@
     <div class="paper">
       <h1 class="fin">¡Fin!</h1>
       <div class="winner" id="winner"></div>
-      <table class="rank"><thead><tr><th>#</th><th>Artista</th><th>Puntos</th><th>Combo</th><th>Perfectos</th></tr></thead><tbody id="rank"></tbody></table>
+      <table class="rank"><thead><tr><th>#</th><th>Artista</th><th>Puntos</th><th>Combo</th><th>Perfectos</th><th>🌍</th></tr></thead><tbody id="rank"></tbody></table>
       <div class="btn-row">
         <button class="alt" id="btn-lobby">🏠 Volver al lobby</button>
         <button class="red" id="btn-again">🔁 ¡Otra función!</button>

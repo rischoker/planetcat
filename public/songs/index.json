@@ -1,0 +1,19 @@
+{
+ "format": "gato-swing-songs",
+ "version": 1,
+ "songs": [
+  {
+   "id": "w-w",
+   "title": "W&W",
+   "bpm": 152.0,
+   "duration": 134.641,
+   "chart": "w-w/chart.json",
+   "audio": "w-w/song.mp3",
+   "modes": [
+    "pista",
+    "serpiente",
+    "tambor"
+   ]
+  }
+ ]
+}
