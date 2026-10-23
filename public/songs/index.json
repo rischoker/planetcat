@@ -14,6 +14,19 @@
     "serpiente",
     "tambor"
    ]
+  },
+  {
+   "id": "pang-pang-pang",
+   "title": "Pang Pang Pang · Kyary Pamyu Pamyu",
+   "bpm": 172.27,
+   "duration": 174.604,
+   "chart": "pang-pang-pang/chart.json",
+   "audio": "pang-pang-pang/song.mp3",
+   "modes": [
+    "pista",
+    "serpiente",
+    "tambor"
+   ]
   }
  ]
 }

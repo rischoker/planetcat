@@ -290,11 +290,16 @@ export class Game {
     const mode = ch.mode || 'classic';
     this.players.forEach((p) => {
       if (p.waiting || !p.remote || !p.alive) return;
-      const msg = { t: 'mode', mode };
-      if (mode === 'tambor' && STEM_INFO[p.laneName]) { msg.lane = p.laneName; msg.label = STEM_INFO[p.laneName].icon + ' ' + STEM_INFO[p.laneName].label; msg.color = STEM_INFO[p.laneName].color; }
-      if (mode === 'pista') { msg.lane = p.laneIdx; msg.color = LANE_COLORS[p.laneIdx]; }
-      this.ui.sendTo(p, msg);
+      this.ui.sendTo(p, this.modeMsg(p, mode));
     });
+  }
+  /** Mensaje de modo para un celular (también se manda al reconectar). */
+  modeMsg(p, mode) {
+    mode = mode || this.mode;
+    const msg = { t: 'mode', mode };
+    if (mode === 'tambor' && STEM_INFO[p.laneName]) { msg.lane = p.laneName; msg.label = STEM_INFO[p.laneName].icon + ' ' + STEM_INFO[p.laneName].label; msg.color = STEM_INFO[p.laneName].color; }
+    if (mode === 'pista') { msg.lane = p.laneIdx; msg.color = LANE_COLORS[p.laneIdx]; }
+    return msg;
   }
 
   /** Cambiar de carril en la pista (◀ ▶). */
@@ -478,6 +483,7 @@ export class Game {
     const chartReady = makeChartAsync(this.analysis, { difficulty: this.difficulty, seed: (Math.random() * 1e9) | 0 }, this.stemSong);
     this.clearObstacles();
     this.nextEv = 0; this.simT = -0.5; this.warned = new Set();
+    this.railHints = 0;
     this.emo = { recent: [], kos: [], joyUntil: 0, surpriseUntil: 0, angryUntil: 0, winkUntil: 0, dizzyUntil: 0, current: 'idle' };
     this.startCount = this.players.size;
     this.state = 'countdown';

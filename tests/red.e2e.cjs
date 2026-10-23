@@ -20,6 +20,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   host.on('console', (m) => { const t = m.text(); if (/\[net\]|ERR|rror/.test(t) && !/404/.test(t)) console.log('HOST:', t); });
   host.on('pageerror', (e) => console.log('HOST ERR', e.message));
   await host.goto(BASE);
+  // esta prueba mide el modo libre (canción analizada en el navegador, eliminación directa)
+  await host.waitForFunction(() => window.game && document.getElementById('loading').classList.contains('hidden'), null, { timeout: 90000 });
+  await host.waitForTimeout(800); await host.evaluate(() => document.getElementById('btn-default-song').click());
   await host.waitForFunction(() => window.game && document.getElementById('net-text').textContent.indexOf('En línea') === 0 && document.getElementById('song-info').textContent.includes('lista'), null, { timeout: 90000 });
   const code = await host.evaluate(() => document.getElementById('room-code').textContent);
   console.log('sala', code, '· transporte host:', await host.evaluate(() => document.getElementById('net-text').textContent));
@@ -70,6 +73,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   console.log('mismos personajes tras recargar host:', rosterBefore === rosterAfter, rosterAfter);
   console.log('celulares de vuelta tras', ((Date.now() - t0) / 1000).toFixed(1), 's:', await host.evaluate(() => [...game.players.values()].map((p) => p.name + (p.connected ? '✓' : '✗')).join(', ')));
   // ---- partida: A salta en ritmo según el host (trampa de test: usa el plan perfecto), B no salta
+  await host.waitForFunction(() => window.game && document.getElementById('loading').classList.contains('hidden'), null, { timeout: 90000 });
+  await host.waitForTimeout(800); await host.evaluate(() => document.getElementById('btn-default-song').click());
   await host.waitForFunction(() => document.getElementById('song-info').textContent.includes('lista'), null, { timeout: 90000 });
   // regresión: saltar en el lobby tras un rato no debe bloquear los saltos en la partida
   await host.evaluate(() => { game.lobbyClock += 300; });
